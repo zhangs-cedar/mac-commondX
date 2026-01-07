@@ -2,11 +2,12 @@
 """状态栏图标模块"""
 
 import objc
-from Foundation import NSObject
+from Foundation import NSObject, NSTimer
 from AppKit import (
     NSStatusBar, NSMenu, NSMenuItem, NSImage, NSColor,
     NSSize, NSRect, NSPoint, NSBezierPath, NSFont,
-    NSApplication, NSUserNotificationCenter, NSUserNotification
+    NSApplication, NSUserNotificationCenter, NSUserNotification,
+    NSAffineTransform
 )
 
 
@@ -18,6 +19,8 @@ class StatusBarIcon(NSObject):
         if self:
             self.cut_manager = cut_manager
             self.status_item = NSStatusBar.systemStatusBar().statusItemWithLength_(-1)  # 可变长度
+            self.animation_timer = None
+            self.animation_frame = 0
             self.setup_icon()
             self.setup_menu()
             
@@ -29,30 +32,113 @@ class StatusBarIcon(NSObject):
         """设置图标"""
         self.update_icon(0)
     
-    def update_icon(self, count):
+    def on_cut_state_change(self, files):
+        """剪切状态变化回调"""
+        count = len(files)
+        
+        # 触发剪切动画（如果文件数增加）
+        if count > 0:
+            self.start_cut_animation(count)
+        else:
+            self.update_icon(0)
+            
+        if count > 0:
+            # 更新菜单标题
+            if count == 1:
+                self.files_header.setTitle_(f"待移动: {files[0]}")
+            else:
+                self.files_header.setTitle_(f"待移动 {count} 个文件")
+        else:
+            self.files_header.setTitle_("无待移动文件")
+            
+    def start_cut_animation(self, final_count):
+        """播放剪切动作动画"""
+        if self.animation_timer:
+            self.animation_timer.invalidate()
+            self.animation_timer = None
+            
+        self.animation_frame = 0
+        self.target_count = final_count
+        
+        # 创建定时器，每 0.05 秒更新一次，播放 6 帧
+        self.animation_timer = NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+            0.05, self, "animateIcon:", None, True
+        )
+        
+    def animateIcon_(self, timer):
+        """动画回调"""
+        self.animation_frame += 1
+        
+        # 简单的“剪切”动作：张开 -> 闭合
+        # 0: 初始, 1: 张开, 2: 张大, 3: 闭合中, 4: 闭合, 5: 恢复
+        angle_map = [0, 15, 30, 15, 0, 0]
+        
+        if self.animation_frame < len(angle_map):
+            self.update_icon(self.target_count, angle=angle_map[self.animation_frame])
+        else:
+            timer.invalidate()
+            self.animation_timer = None
+            self.update_icon(self.target_count)
+
+    def update_icon(self, count, angle=0):
         """更新图标显示"""
         size = NSSize(22, 22)
         image = NSImage.alloc().initWithSize_(size)
         image.lockFocus()
         
-        # 绘制剪刀图标
+        # 绘制剪刀图标 (SF Symbols 风格 - 缩小居中版)
         NSColor.labelColor().setStroke()
         
-        # 简化的剪刀形状
-        path = NSBezierPath.bezierPath()
-        path.setLineWidth_(1.5)
+        # 整体缩放系数 (0.8 = 缩小到 80%)
+        scale = 0.8
         
-        # 左刀片
-        path.moveToPoint_(NSPoint(4, 18))
-        path.lineToPoint_(NSPoint(11, 11))
-        path.lineToPoint_(NSPoint(4, 4))
+        # 基础变换：缩放 + 居中
+        base_transform = NSAffineTransform.transform()
+        offset_x = (22 - (22 * scale)) / 2
+        offset_y = (22 - (22 * scale)) / 2
+        base_transform.translateXBy_yBy_(offset_x, offset_y)
+        base_transform.scaleBy_(scale)
+        base_transform.concat()
         
-        # 右刀片
-        path.moveToPoint_(NSPoint(18, 18))
-        path.lineToPoint_(NSPoint(11, 11))
-        path.lineToPoint_(NSPoint(18, 4))
+        # 绘制左部分（带旋转）
+        left_path = NSBezierPath.bezierPath()
+        left_path.setLineWidth_(1.5)
+        left_path.setLineJoinStyle_(1)
+        left_path.setLineCapStyle_(1)
         
-        path.stroke()
+        left_path.appendBezierPathWithOvalInRect_(NSRect(NSPoint(4, 3), NSSize(5, 5))) # 左手柄
+        left_path.moveToPoint_(NSPoint(6.5, 8))
+        left_path.lineToPoint_(NSPoint(16, 19)) # 左刀刃
+        
+        if angle > 0:
+            # 绕中心点 (11, 11) 逆时针旋转
+            left_transform = NSAffineTransform.transform()
+            left_transform.translateXBy_yBy_(11, 11)
+            left_transform.rotateByDegrees_(angle)
+            left_transform.translateXBy_yBy_(-11, -11)
+            left_path.transformUsingAffineTransform_(left_transform)
+            
+        left_path.stroke()
+        
+        # 绘制右部分（带旋转）
+        right_path = NSBezierPath.bezierPath()
+        right_path.setLineWidth_(1.5)
+        right_path.setLineJoinStyle_(1)
+        right_path.setLineCapStyle_(1)
+        
+        right_path.appendBezierPathWithOvalInRect_(NSRect(NSPoint(13, 3), NSSize(5, 5))) # 右手柄
+        right_path.moveToPoint_(NSPoint(15.5, 8))
+        right_path.lineToPoint_(NSPoint(6, 19)) # 右刀刃
+        
+        if angle > 0:
+            # 绕中心点 (11, 11) 顺时针旋转
+            right_transform = NSAffineTransform.transform()
+            right_transform.translateXBy_yBy_(11, 11)
+            right_transform.rotateByDegrees_(-angle)
+            right_transform.translateXBy_yBy_(-11, -11)
+            right_path.transformUsingAffineTransform_(right_transform)
+            
+        right_path.stroke()
         
         # 如果有剪切文件，显示数量徽章
         if count > 0:
@@ -62,15 +148,11 @@ class StatusBarIcon(NSObject):
             NSBezierPath.bezierPathWithOvalInRect_(badge_rect).fill()
             
             # 白色数字
-            NSColor.whiteColor().setFill()
-            font = NSFont.boldSystemFontOfSize_(7)
-            text = str(count) if count < 10 else "+"
+            # NSColor.whiteColor().setFill()
+            # font = NSFont.boldSystemFontOfSize_(7)
             
             # 绘制数字（简化处理，居中显示）
-            attrs = {
-                "NSFont": font,
-                "NSColor": NSColor.whiteColor()
-            }
+            # ...
         
         image.unlockFocus()
         image.setTemplate_(count == 0)  # 无文件时使用模板模式适应深色/浅色主题
@@ -127,20 +209,6 @@ class StatusBarIcon(NSObject):
         
         self.menu = menu
         self.status_item.setMenu_(menu)
-    
-    def on_cut_state_change(self, files):
-        """剪切状态变化回调"""
-        count = len(files)
-        self.update_icon(count)
-        
-        if count > 0:
-            # 更新菜单标题
-            if count == 1:
-                self.files_header.setTitle_(f"待移动: {files[0]}")
-            else:
-                self.files_header.setTitle_(f"待移动 {count} 个文件")
-        else:
-            self.files_header.setTitle_("无待移动文件")
     
     @objc.IBAction
     def clearCut_(self, sender):
