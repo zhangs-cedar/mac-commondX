@@ -1,0 +1,11 @@
+# CommondX 配置文件
+
+# 通知设置
+notifications:
+  enabled: true
+  sound: true
+
+# 快捷键（预留，当前使用系统默认 Cmd+X/V）
+shortcuts:
+  cut: "cmd+x"
+  paste: "cmd+v"

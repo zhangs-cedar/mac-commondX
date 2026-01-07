@@ -1,0 +1,7 @@
+# Mac CommondX 依赖
+pyobjc-core>=10.0
+pyobjc-framework-Cocoa>=10.0
+pyobjc-framework-Quartz>=10.0
+pyobjc-framework-ApplicationServices>=10.0
+PyYAML>=6.0
+pyinstaller>=6.0
