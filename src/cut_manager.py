@@ -94,14 +94,19 @@ class CutManager:
     
     def paste(self) -> Tuple[bool, str]:
         """执行粘贴操作 - 移动文件到目标位置 (使用 Finder 原生移动)"""
+        print(f"[CutManager] Starting paste. Cut files: {self.cut_files}")
         if not self.cut_files:
+            print("[CutManager] No files to move")
             return False, "没有待移动的文件"
         
         target_folder = self.get_finder_current_folder()
+        print(f"[CutManager] Target folder: {target_folder}")
         if not target_folder:
+            print("[CutManager] Could not get target folder")
             return False, "无法获取目标文件夹"
             
         if not Path(target_folder).exists():
+             print("[CutManager] Target folder does not exist")
              return False, "目标文件夹不存在"
 
         # 构造 AppleScript
@@ -124,6 +129,7 @@ class CutManager:
         end tell
         '''
         
+        print(f"[CutManager] Running AppleScript to move files...")
         try:
             result = subprocess.run(
                 ['osascript', '-e', script],
@@ -131,15 +137,19 @@ class CutManager:
             )
             
             output = result.stdout.strip()
+            print(f"[CutManager] AppleScript result: {output}")
+            
             if output == "OK":
                 count = len(self.cut_files)
                 self.cut_files = []
                 self._notify_state_change()
                 return True, f"已移动 {count} 个文件"
             else:
+                print(f"[CutManager] Move failed: {output}")
                 return False, f"移动失败: {output}"
                 
         except Exception as e:
+            print(f"[CutManager] Exception during move: {e}")
             return False, f"执行出错: {str(e)}"
     
     def clear(self):

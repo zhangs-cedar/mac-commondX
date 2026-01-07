@@ -8,6 +8,7 @@ import sys
 import os
 from pathlib import Path
 
+import objc
 from Foundation import NSObject
 from AppKit import NSApplication
 
@@ -20,7 +21,7 @@ class CommondXApp(NSObject):
     """CommondX 应用代理"""
     
     def init(self):
-        self = super().init()
+        self = objc.super(CommondXApp, self).init()
         if self:
             self.cut_manager = None
             self.event_tap = None

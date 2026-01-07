@@ -151,7 +151,7 @@ class StatusBarIcon(NSObject):
     @objc.IBAction
     def toggleAutostart_(self, sender):
         """切换开机自启"""
-        from launch_agent import toggle_autostart
+        from .launch_agent import toggle_autostart
         enabled = toggle_autostart()
         self.autostart_item.setState_(1 if enabled else 0)
         status = "已开启" if enabled else "已关闭"
@@ -160,7 +160,7 @@ class StatusBarIcon(NSObject):
     def _is_autostart_enabled(self):
         """检查是否已开启开机自启"""
         try:
-            from launch_agent import is_autostart_enabled
+            from .launch_agent import is_autostart_enabled
             return is_autostart_enabled()
         except:
             return False
@@ -180,7 +180,11 @@ class StatusBarIcon(NSObject):
     
     def send_notification(self, title, message):
         """发送系统通知"""
-        notification = NSUserNotification.alloc().init()
-        notification.setTitle_(title)
-        notification.setInformativeText_(message)
-        NSUserNotificationCenter.defaultUserNotificationCenter().deliverNotification_(notification)
+        center = NSUserNotificationCenter.defaultUserNotificationCenter()
+        if center:
+            notification = NSUserNotification.alloc().init()
+            notification.setTitle_(title)
+            notification.setInformativeText_(message)
+            center.deliverNotification_(notification)
+        else:
+            print(f"[Notification] {title}: {message}")

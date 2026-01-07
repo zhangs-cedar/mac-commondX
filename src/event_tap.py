@@ -46,22 +46,36 @@ class EventTap:
                 cmd_only = (flags & CMD_MASK) and not (flags & OPTION_MASK) and not (flags & SHIFT_MASK)
                 
                 if cmd_only:
-                    # 检查当前应用是否为 Finder
-                    ws = NSWorkspace.sharedWorkspace()
-                    front_app = ws.frontmostApplication()
-                    if not front_app or front_app.bundleIdentifier() != "com.apple.finder":
-                        return event
+                    if keycode in (KEY_X, KEY_V):
+                        print(f"[EventTap] Detected Cmd+{ 'X' if keycode == KEY_X else 'V' }")
+                        # 检查当前应用是否为 Finder
+                        ws = NSWorkspace.sharedWorkspace()
+                        front_app = ws.frontmostApplication()
+                        
+                        if front_app:
+                            print(f"[EventTap] Front app: {front_app.localizedName()} ({front_app.bundleIdentifier()})")
+                        else:
+                            print("[EventTap] Could not determine front app")
 
-                    handled = False
-                    if keycode == KEY_X and self.on_cut:
-                        # Cmd+X: 剪切
-                        handled = self.on_cut()
-                    elif keycode == KEY_V and self.on_paste:
-                        # Cmd+V: 粘贴（如果有剪切内容则移动）
-                        handled = self.on_paste()
-                    
-                    if handled:
-                        return None
+                        if not front_app or front_app.bundleIdentifier() != "com.apple.finder":
+                            print("[EventTap] Not Finder, ignoring")
+                            return event
+
+                        handled = False
+                        if keycode == KEY_X and self.on_cut:
+                            print("[EventTap] Triggering Cut")
+                            # Cmd+X: 剪切
+                            handled = self.on_cut()
+                        elif keycode == KEY_V and self.on_paste:
+                            print("[EventTap] Triggering Paste")
+                            # Cmd+V: 粘贴（如果有剪切内容则移动）
+                            handled = self.on_paste()
+                        
+                        if handled:
+                            print("[EventTap] Event handled, swallowing")
+                            return None
+                        else:
+                            print("[EventTap] Event not handled")
         except Exception as e:
             print(f"Event callback error: {e}")
         
