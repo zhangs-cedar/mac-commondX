@@ -1,100 +1,68 @@
 #!/usr/bin/env python3
-"""开机自启管理模块 - LaunchAgent"""
+"""开机自启管理 - LaunchAgent"""
 
-import os
 import plistlib
 import subprocess
+from pathlib import Path
 from cedar.utils import print
 
 APP_ID = "com.liuns.commondx"
-PLIST_NAME = f"{APP_ID}.plist"
+PLIST_PATH = Path.home() / f"Library/LaunchAgents/{APP_ID}.plist"
+LOG_DIR = Path.home() / "Library/Logs"
+
+# 应用路径候选
+APP_PATHS = [
+    Path("/Applications/CommondX.app/Contents/MacOS/CommondX"),
+    Path.home() / "Applications/CommondX.app/Contents/MacOS/CommondX",
+    Path(__file__).parent / "commondx.py",  # 开发模式
+]
 
 
-def get_plist_path():
-    """获取 LaunchAgent plist 路径"""
-    return os.path.expanduser(f"~/Library/LaunchAgents/{PLIST_NAME}")
-
-
-def get_app_path():
+def _get_app_path() -> str:
     """获取应用路径"""
-    # 优先使用打包后的 .app 路径
-    app_locations = [
-        "/Applications/CommondX.app/Contents/MacOS/CommondX",
-        os.path.expanduser("~/Applications/CommondX.app/Contents/MacOS/CommondX"),
-    ]
-    
-    for path in app_locations:
-        if os.path.exists(path):
-            return path
-    
-    # 开发模式：使用当前脚本路径
-    return os.path.abspath(os.path.join(os.path.dirname(__file__), "commondx.py"))
+    for p in APP_PATHS:
+        if p.exists():
+            return str(p)
+    return str(APP_PATHS[-1])
 
 
-def create_plist():
-    """创建 LaunchAgent plist 文件"""
-    app_path = get_app_path()
-    
-    plist_content = {
+def _create_plist() -> dict:
+    """创建 plist 配置"""
+    app = _get_app_path()
+    args = ["/usr/bin/python3", app] if app.endswith(".py") else [app]
+    return {
         "Label": APP_ID,
-        "ProgramArguments": [app_path] if app_path.endswith(".py") else [app_path],
+        "ProgramArguments": args,
         "RunAtLoad": True,
         "KeepAlive": False,
-        "StandardOutPath": os.path.expanduser("~/Library/Logs/CommondX.log"),
-        "StandardErrorPath": os.path.expanduser("~/Library/Logs/CommondX.error.log"),
+        "StandardOutPath": str(LOG_DIR / "CommondX.log"),
+        "StandardErrorPath": str(LOG_DIR / "CommondX.error.log"),
     }
-    
-    # 如果是 Python 脚本，需要通过 python3 运行
-    if app_path.endswith(".py"):
-        plist_content["ProgramArguments"] = ["/usr/bin/python3", app_path]
-    
-    return plist_content
 
 
-def is_autostart_enabled():
-    """检查是否已开启开机自启"""
-    plist_path = get_plist_path()
-    return os.path.exists(plist_path)
+def is_autostart_enabled() -> bool:
+    """检查是否已开启"""
+    return PLIST_PATH.exists()
 
 
-def enable_autostart():
+def enable_autostart() -> bool:
     """启用开机自启"""
-    plist_path = get_plist_path()
-    
-    # 确保目录存在
-    os.makedirs(os.path.dirname(plist_path), exist_ok=True)
-    
-    # 写入 plist
-    plist_content = create_plist()
-    with open(plist_path, 'wb') as f:
-        plistlib.dump(plist_content, f)
-    
-    # 加载 LaunchAgent
-    subprocess.run(['launchctl', 'load', plist_path], capture_output=True)
-    
-    print(f"已启用开机自启: {plist_path}")
+    PLIST_PATH.parent.mkdir(parents=True, exist_ok=True)
+    PLIST_PATH.write_bytes(plistlib.dumps(_create_plist()))
+    subprocess.run(['launchctl', 'load', str(PLIST_PATH)], capture_output=True)
+    print(f"已启用开机自启")
     return True
 
 
-def disable_autostart():
+def disable_autostart() -> bool:
     """禁用开机自启"""
-    plist_path = get_plist_path()
-    
-    if os.path.exists(plist_path):
-        # 卸载 LaunchAgent
-        subprocess.run(['launchctl', 'unload', plist_path], capture_output=True)
-        # 删除 plist
-        os.remove(plist_path)
+    if PLIST_PATH.exists():
+        subprocess.run(['launchctl', 'unload', str(PLIST_PATH)], capture_output=True)
+        PLIST_PATH.unlink()
         print("已禁用开机自启")
-    
     return False
 
 
-def toggle_autostart():
+def toggle_autostart() -> bool:
     """切换开机自启状态"""
-    if is_autostart_enabled():
-        disable_autostart()
-        return False
-    else:
-        enable_autostart()
-        return True
+    return disable_autostart() if is_autostart_enabled() else enable_autostart()

@@ -1,110 +1,73 @@
 #!/usr/bin/env python3
-"""全局快捷键监听模块 - 使用 Quartz Event Tap"""
+"""全局快捷键监听 - Quartz Event Tap"""
 
 import Quartz
 from Quartz import (
     CGEventTapCreate, CGEventTapEnable, CFMachPortCreateRunLoopSource,
-    CFRunLoopAddSource, CFRunLoopGetCurrent, CFRunLoopRun,
+    CFRunLoopAddSource, CFRunLoopGetCurrent, CGEventMaskBit,
     kCGSessionEventTap, kCGHeadInsertEventTap, kCGEventTapOptionDefault,
-    CGEventMaskBit, kCGEventKeyDown, CGEventGetIntegerValueField,
-    kCGKeyboardEventKeycode
+    kCGEventKeyDown, CGEventGetIntegerValueField, kCGKeyboardEventKeycode
 )
-from Foundation import NSRunLoop, NSDefaultRunLoopMode
 from AppKit import NSWorkspace
-import threading
 from cedar.utils import print
 
-
-# macOS 键码
-KEY_X = 7
-KEY_V = 9
-KEY_C = 8
-
-# 修饰键掩码
-CMD_MASK = Quartz.kCGEventFlagMaskCommand
-SHIFT_MASK = Quartz.kCGEventFlagMaskShift
-OPTION_MASK = Quartz.kCGEventFlagMaskAlternate
+# 键码与修饰键
+KEY_X, KEY_V = 7, 9
+CMD, SHIFT, OPT = Quartz.kCGEventFlagMaskCommand, Quartz.kCGEventFlagMaskShift, Quartz.kCGEventFlagMaskAlternate
+FINDER_ID = "com.apple.finder"
 
 
 class EventTap:
     """全局快捷键监听器"""
     
     def __init__(self, on_cut=None, on_paste=None):
-        self.on_cut = on_cut      # Cmd+X 回调
-        self.on_paste = on_paste  # Cmd+V 回调
+        self.on_cut = on_cut
+        self.on_paste = on_paste
         self.tap = None
         self.running = False
-        self._thread = None
+    
+    def _is_finder_active(self) -> bool:
+        """检查 Finder 是否为前台应用"""
+        app = NSWorkspace.sharedWorkspace().frontmostApplication()
+        return app and app.bundleIdentifier() == FINDER_ID
     
     def _callback(self, proxy, event_type, event, refcon):
         """事件回调"""
         try:
-            if event_type == kCGEventKeyDown:
-                keycode = CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode)
-                flags = Quartz.CGEventGetFlags(event)
-                
-                # 检查是否按下 Cmd 键（不含其他修饰键）
-                cmd_only = (flags & CMD_MASK) and not (flags & OPTION_MASK) and not (flags & SHIFT_MASK)
-                
-                if cmd_only:
-                    if keycode in (KEY_X, KEY_V):
-                        print(f"[EventTap] Detected Cmd+{ 'X' if keycode == KEY_X else 'V' }")
-                        # 检查当前应用是否为 Finder
-                        ws = NSWorkspace.sharedWorkspace()
-                        front_app = ws.frontmostApplication()
-                        
-                        if front_app:
-                            print(f"[EventTap] Front app: {front_app.localizedName()} ({front_app.bundleIdentifier()})")
-                        else:
-                            print("[EventTap] Could not determine front app")
-
-                        if not front_app or front_app.bundleIdentifier() != "com.apple.finder":
-                            print("[EventTap] Not Finder, ignoring")
-                            return event
-
-                        handled = False
-                        if keycode == KEY_X and self.on_cut:
-                            print("[EventTap] Triggering Cut")
-                            # Cmd+X: 剪切
-                            handled = self.on_cut()
-                        elif keycode == KEY_V and self.on_paste:
-                            print("[EventTap] Triggering Paste")
-                            # Cmd+V: 粘贴（如果有剪切内容则移动）
-                            handled = self.on_paste()
-                        
-                        if handled:
-                            print("[EventTap] Event handled, swallowing")
-                            return None
-                        else:
-                            print("[EventTap] Event not handled")
+            if event_type != kCGEventKeyDown:
+                return event
+            
+            keycode = CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode)
+            if keycode not in (KEY_X, KEY_V):
+                return event
+            
+            flags = Quartz.CGEventGetFlags(event)
+            if not (flags & CMD) or (flags & SHIFT) or (flags & OPT):
+                return event
+            
+            if not self._is_finder_active():
+                return event
+            
+            handler = self.on_cut if keycode == KEY_X else self.on_paste
+            if handler and handler():
+                return None  # 吞掉事件
         except Exception as e:
             print(f"Event callback error: {e}")
-        
         return event
     
-    def start(self):
-        """启动事件监听"""
+    def start(self) -> bool:
+        """启动监听"""
         if self.running:
-            return
+            return True
         
-        # 创建事件掩码（只监听键盘按下事件）
-        mask = CGEventMaskBit(kCGEventKeyDown)
-        
-        # 创建事件 tap
         self.tap = CGEventTapCreate(
-            kCGSessionEventTap,
-            kCGHeadInsertEventTap,
-            kCGEventTapOptionDefault,
-            mask,
-            self._callback,
-            None
+            kCGSessionEventTap, kCGHeadInsertEventTap, kCGEventTapOptionDefault,
+            CGEventMaskBit(kCGEventKeyDown), self._callback, None
         )
-        
         if not self.tap:
-            print("无法创建 Event Tap，请检查辅助功能权限")
+            print("无法创建 Event Tap，检查辅助功能权限")
             return False
         
-        # 添加到运行循环
         source = CFMachPortCreateRunLoopSource(None, self.tap, 0)
         CFRunLoopAddSource(CFRunLoopGetCurrent(), source, Quartz.kCFRunLoopCommonModes)
         CGEventTapEnable(self.tap, True)
@@ -114,11 +77,9 @@ class EventTap:
         return True
     
     def stop(self):
-        """停止事件监听"""
+        """停止监听"""
         if self.tap:
             CGEventTapEnable(self.tap, False)
             self.tap = None
         self.running = False
         print("Event Tap 已停止")
-
-
