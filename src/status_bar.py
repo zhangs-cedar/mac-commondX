@@ -167,7 +167,76 @@ class StatusBarIcon(NSObject):
     
     def setup_menu(self):
         """设置右键菜单"""
+        from .license_manager import license_manager
+        status, machine_code, remaining = license_manager.get_status()
+        
         menu = NSMenu.alloc().init()
+        
+        # 激活状态
+        if status == "activated":
+            status_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                "✓ 已激活", None, ""
+            )
+            status_item.setEnabled_(False)
+            menu.addItem_(status_item)
+        elif status == "trial":
+            # 试用期
+            status_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                f"试用期 (剩余 {remaining} 天)", None, ""
+            )
+            status_item.setEnabled_(False)
+            menu.addItem_(status_item)
+            
+            # 机器码
+            machine_code_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                f"机器码: {machine_code}", "copyMachineCode:", ""
+            )
+            machine_code_item.setTarget_(self)
+            menu.addItem_(machine_code_item)
+            
+            # 输入激活码
+            activate_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                "输入激活码...", "showActivationInput:", ""
+            )
+            activate_item.setTarget_(self)
+            menu.addItem_(activate_item)
+            
+            # 购买
+            buy_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                "购买激活码 (¥2.00)", "openBuyPage:", ""
+            )
+            buy_item.setTarget_(self)
+            menu.addItem_(buy_item)
+        else:
+            # 试用期已过
+            status_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                "⚠ 试用期已结束", None, ""
+            )
+            status_item.setEnabled_(False)
+            menu.addItem_(status_item)
+            
+            # 机器码
+            machine_code_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                f"机器码: {machine_code}", "copyMachineCode:", ""
+            )
+            machine_code_item.setTarget_(self)
+            menu.addItem_(machine_code_item)
+            
+            # 输入激活码
+            activate_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                "输入激活码...", "showActivationInput:", ""
+            )
+            activate_item.setTarget_(self)
+            menu.addItem_(activate_item)
+            
+            # 购买
+            buy_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                "购买激活码 (¥2.00)", "openBuyPage:", ""
+            )
+            buy_item.setTarget_(self)
+            menu.addItem_(buy_item)
+        
+        menu.addItem_(NSMenuItem.separatorItem())
         
         # 剪切文件列表标题
         self.files_header = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
@@ -209,6 +278,63 @@ class StatusBarIcon(NSObject):
         
         self.menu = menu
         self.status_item.setMenu_(menu)
+    
+    @objc.IBAction
+    def copyMachineCode_(self, sender):
+        """复制机器码到剪贴板"""
+        from AppKit import NSPasteboard, NSStringPboardType
+        from .license_manager import license_manager
+        
+        pb = NSPasteboard.generalPasteboard()
+        pb.clearContents()
+        pb.setString_forType_(license_manager.machine_code, NSStringPboardType)
+        self.send_notification("已复制", f"机器码 {license_manager.machine_code} 已复制到剪贴板")
+    
+    @objc.IBAction
+    def showActivationInput_(self, sender):
+        """显示激活码输入框"""
+        from AppKit import NSAlert, NSTextField, NSApp
+        from .license_manager import license_manager
+        
+        alert = NSAlert.alloc().init()
+        alert.setMessageText_("输入激活码")
+        alert.setInformativeText_(f"您的机器码: {license_manager.machine_code}\n\n请输入购买的激活码：")
+        alert.addButtonWithTitle_("激活")
+        alert.addButtonWithTitle_("取消")
+        
+        input_field = NSTextField.alloc().initWithFrame_(NSRect(NSPoint(0, 0), NSSize(250, 24)))
+        input_field.setPlaceholderString_("XXXX-XXXX-XXXX-XXXX")
+        alert.setAccessoryView_(input_field)
+        
+        NSApp.activateIgnoringOtherApps_(True)
+        response = alert.runModal()
+        
+        if response == 1000:  # 点击了激活
+            code = input_field.stringValue().strip()
+            if license_manager.activate(code):
+                self.send_notification("激活成功", "感谢您的支持！请重启应用。")
+                self.setup_menu()  # 刷新菜单
+            else:
+                self.send_notification("激活失败", "激活码无效，请检查是否输入正确")
+    
+    @objc.IBAction
+    def openBuyPage_(self, sender):
+        """打开购买页面"""
+        from AppKit import NSWorkspace, NSURL
+        from .license_manager import license_manager
+        
+        # TODO: 替换为你的收款页面链接
+        # 建议创建一个简单网页，展示收款码和说明
+        buy_url = f"https://your-payment-page.com?machine_code={license_manager.machine_code}"
+        url = NSURL.URLWithString_(buy_url)
+        NSWorkspace.sharedWorkspace().openURL_(url)
+        
+        self.send_notification("购买说明", f"请将机器码 {license_manager.machine_code} 和付款截图发送给开发者")
+    
+    def show_activation_required(self):
+        """显示需要激活的提示"""
+        from .license_manager import license_manager
+        self.send_notification("试用期已结束", f"机器码: {license_manager.machine_code}\n请购买激活码继续使用")
     
     @objc.IBAction
     def clearCut_(self, sender):
