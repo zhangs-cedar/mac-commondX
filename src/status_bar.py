@@ -323,13 +323,18 @@ class StatusBarIcon(NSObject):
         from AppKit import NSWorkspace, NSURL
         from .license_manager import license_manager
         
-        # TODO: 替换为你的收款页面链接
-        # 建议创建一个简单网页，展示收款码和说明
-        buy_url = f"https://your-payment-page.com?machine_code={license_manager.machine_code}"
+        # 腾讯问卷购买页面
+        buy_url = "https://wj.qq.com/s2/25468218/6ee1/"
         url = NSURL.URLWithString_(buy_url)
         NSWorkspace.sharedWorkspace().openURL_(url)
         
-        self.send_notification("购买说明", f"请将机器码 {license_manager.machine_code} 和付款截图发送给开发者")
+        # 复制机器码到剪贴板，方便用户填写
+        from AppKit import NSPasteboard, NSStringPboardType
+        pb = NSPasteboard.generalPasteboard()
+        pb.clearContents()
+        pb.setString_forType_(license_manager.machine_code, NSStringPboardType)
+        
+        self.send_notification("已打开购买页面", f"机器码已复制: {license_manager.machine_code}")
     
     def show_activation_required(self):
         """显示需要激活的提示"""
