@@ -57,18 +57,19 @@ class CutManager:
         script = '''
         tell application "Finder"
             try
-                -- 没有打开窗口时，默认为桌面
-                if (count of windows) = 0 then
-                    return POSIX path of (path to desktop)
-                end if
-                set frontWindow to front window
-                -- 检测桌面窗口
-                if name of frontWindow is "桌面" or name of frontWindow is "Desktop" then
-                    return POSIX path of (path to desktop)
-                end if
-                return POSIX path of (target of frontWindow as alias)
+                -- 检查插入位置（最准确的方式）
+                set insertLoc to insertion location as alias
+                return POSIX path of insertLoc
             on error
-                return POSIX path of (path to desktop)
+                -- 备选方案
+                try
+                    if (count of windows) = 0 then
+                        return POSIX path of (path to desktop)
+                    end if
+                    return POSIX path of (target of front window as alias)
+                on error
+                    return POSIX path of (path to desktop)
+                end try
             end try
         end tell
         '''
