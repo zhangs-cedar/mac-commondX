@@ -367,10 +367,23 @@ class StatusBarIcon(NSObject):
     @objc.IBAction
     def showAbout_(self, sender):
         """显示关于"""
-        self.send_notification(
-            "CommondX",
-            "Mac 文件剪切移动工具\n使用 Cmd+X 剪切，Cmd+V 移动"
+        from AppKit import NSAlert, NSApp
+        
+        alert = NSAlert.alloc().init()
+        alert.setMessageText_("CommondX")
+        alert.setInformativeText_(
+            "Mac 文件剪切移动工具\n\n"
+            "使用方法:\n"
+            "• Cmd+X 剪切文件/文件夹\n"
+            "• Cmd+V 移动到目标位置\n"
+            "• Cmd+Z 撤销移动\n\n"
+            "版本: 1.0.0\n"
+            "作者: Cedar"
         )
+        alert.addButtonWithTitle_("确定")
+        
+        NSApp.activateIgnoringOtherApps_(True)
+        alert.runModal()
     
     @objc.IBAction
     def quit_(self, sender):
