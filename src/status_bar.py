@@ -10,6 +10,8 @@ from AppKit import (
 )
 from cedar.utils import print
 
+from .file_dialog import show_file_operations_dialog
+
 
 def _add_menu_item(menu, target, title, action=None, key="", enabled=True):
     """创建菜单项（类外函数避免 PyObjC 冲突）"""
@@ -173,6 +175,7 @@ class StatusBarIcon(NSObject):
         # 功能区
         self.files_header = _add_menu_item(menu, self, "无待移动文件", enabled=False)
         _add_menu_item(menu, self, "清空列表", "clearCut:")
+        _add_menu_item(menu, self, "文件智能操作", "smartFileOperations:")
         
         menu.addItem_(NSMenuItem.separatorItem())
         
@@ -257,6 +260,23 @@ class StatusBarIcon(NSObject):
     def clearCut_(self, sender):
         self.cut_manager.clear()
         self.send_notification("🗑️ 已清空", "剪切列表已清空")
+    
+    @objc.IBAction
+    def smartFileOperations_(self, sender):
+        """文件智能操作"""
+        files = self.cut_manager.get_finder_selection()
+        if not files:
+            self.send_notification("⚠️ 未选中文件", "请在 Finder 中选中文件")
+            return
+        
+        # 显示文件操作弹窗
+        if show_file_operations_dialog(files):
+            # 用户点击了"复制路径"
+            paths_text = "\n".join(files)
+            self._copy_to_clipboard(paths_text)
+            count = len(files)
+            msg = f"已复制 {count} 个文件路径" if count > 1 else "已复制文件路径"
+            self.send_notification("✅ 已复制路径", msg)
     
     @objc.IBAction
     def checkPermission_(self, sender):
