@@ -298,7 +298,7 @@ class StatusBarIcon(NSObject):
     def showAbout_(self, sender):
         from AppKit import NSApp
         NSApp.activateIgnoringOtherApps_(True)
-        self._show_alert("✂️ CommondX", "Mac 文件剪切移动工具\n\n• Cmd+X 剪切\n• Cmd+V 移动\n\n版本: 1.0.0\n作者: Cedar 🐱")
+        self._show_alert("✂️ CommondX", "Mac 文件剪切移动工具\n\n• Cmd+X 剪切\n• Cmd+V 移动\n\n版本: 1.0.0\n作者: Cedar 🐱\n微信: z858998813")
     
     @objc.IBAction
     def quit_(self, sender):
