@@ -11,6 +11,7 @@ from AppKit import (
 from cedar.utils import print
 
 from .file_dialog import show_file_operations_dialog
+from .archive_manager import compress_to_zip, decompress_archive
 
 
 def _add_menu_item(menu, target, title, action=None, key="", enabled=True):
@@ -33,6 +34,7 @@ class StatusBarIcon(NSObject):
             self.status_item = NSStatusBar.systemStatusBar().statusItemWithLength_(-1)
             self.animation_timer = None
             self.animation_frame = 0
+            self.cached_files = []  # 缓存上次获取的文件列表
             self.update_icon(0)
             self.setup_menu()
             cut_manager.on_state_change = self.on_cut_state_change
@@ -264,19 +266,47 @@ class StatusBarIcon(NSObject):
     @objc.IBAction
     def smartFileOperations_(self, sender):
         """文件智能操作"""
+        # 尝试获取当前选中的文件
         files = self.cut_manager.get_finder_selection()
+        
+        # 如果获取失败或为空，使用缓存的列表
         if not files:
-            self.send_notification("⚠️ 未选中文件", "请在 Finder 中选中文件")
-            return
+            if self.cached_files:
+                files = self.cached_files
+            else:
+                self.send_notification("⚠️ 未选中文件", "请在 Finder 中选中文件")
+                return
+        else:
+            # 获取成功，更新缓存
+            self.cached_files = files
         
         # 显示文件操作弹窗
-        if show_file_operations_dialog(files):
-            # 用户点击了"复制路径"
+        action = show_file_operations_dialog(files)
+        
+        if action == "copy":
+            # 复制路径
             paths_text = "\n".join(files)
             self._copy_to_clipboard(paths_text)
             count = len(files)
             msg = f"已复制 {count} 个文件路径" if count > 1 else "已复制文件路径"
             self.send_notification("✅ 已复制路径", msg)
+        
+        elif action == "compress":
+            # 压缩为 ZIP
+            success, msg, output_path = compress_to_zip(files)
+            if success:
+                self.send_notification("✅ 压缩成功", msg)
+            else:
+                self.send_notification("❌ 压缩失败", msg)
+        
+        elif action == "decompress":
+            # 解压压缩文件
+            for archive_path in files:
+                success, msg, output_dir = decompress_archive(archive_path)
+                if success:
+                    self.send_notification("✅ 解压成功", msg)
+                else:
+                    self.send_notification("❌ 解压失败", msg)
     
     @objc.IBAction
     def checkPermission_(self, sender):
