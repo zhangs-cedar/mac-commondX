@@ -115,48 +115,6 @@ class StatusBarIcon(NSObject):
         self.status_item.setImage_(image)
         self.status_item.setTitle_(f" {count}" if count > 0 else "")
     
-    def setup_menu(self):
-        """设置菜单"""
-        from .license_manager import license_manager
-        from .permission import check_accessibility
-        
-        status, code, remaining = license_manager.get_status()
-        menu = NSMenu.alloc().init()
-        
-        # 许可状态
-        if status == "activated":
-            _add_menu_item(menu, self, "✓ 已激活", enabled=False)
-        else:
-            title = f"试用期 (剩余 {remaining} 天)" if status == "trial" else "⚠ 试用期已结束"
-            _add_menu_item(menu, self, title, enabled=False)
-            _add_menu_item(menu, self, f"机器码: {code}", "copyMachineCode:")
-            _add_menu_item(menu, self, "输入激活码...", "showActivationInput:")
-            _add_menu_item(menu, self, "购买激活码 (¥2.00)", "openBuyPage:")
-        
-        menu.addItem_(NSMenuItem.separatorItem())
-        self.files_header = _add_menu_item(menu, self, "无待移动文件", enabled=False)
-        menu.addItem_(NSMenuItem.separatorItem())
-        _add_menu_item(menu, self, "清空剪切列表", "clearCut:")
-        menu.addItem_(NSMenuItem.separatorItem())
-        
-        # 权限
-        perm_ok = check_accessibility()
-        self.permission_item = _add_menu_item(menu, self, "✓ 已授权" if perm_ok else "⚠ 未授权", enabled=False)
-        _add_menu_item(menu, self, "检查权限", "checkPermission:")
-        _add_menu_item(menu, self, "打开辅助功能设置", "openAccessibilitySettings:")
-        menu.addItem_(NSMenuItem.separatorItem())
-        
-        # 自启
-        self.autostart_item = _add_menu_item(menu, self, "开机自启", "toggleAutostart:")
-        self.autostart_item.setState_(1 if self._is_autostart_enabled() else 0)
-        menu.addItem_(NSMenuItem.separatorItem())
-        
-        _add_menu_item(menu, self, "关于 CommondX", "showAbout:")
-        _add_menu_item(menu, self, "退出", "quit:", "q")
-        
-        self.menu = menu
-        self.status_item.setMenu_(menu)
-    
     def _copy_to_clipboard(self, text):
         """复制到剪贴板"""
         from AppKit import NSPasteboard, NSStringPboardType
@@ -166,74 +124,137 @@ class StatusBarIcon(NSObject):
     
     def _show_alert(self, title, msg, with_input=False):
         """显示弹窗"""
-        from AppKit import NSAlert, NSTextField, NSApp, NSRunningApplication, NSApplicationActivateIgnoringOtherApps
-        
-        policy = NSApp.activationPolicy()
+        from AppKit import NSAlert, NSTextField, NSApp
         NSApp.setActivationPolicy_(0)
         NSApp.activateIgnoringOtherApps_(True)
-        NSRunningApplication.currentApplication().activateWithOptions_(NSApplicationActivateIgnoringOtherApps)
         
         alert = NSAlert.alloc().init()
         alert.setMessageText_(title)
         alert.setInformativeText_(msg)
         alert.addButtonWithTitle_("确定" if not with_input else "激活")
+        
+        field = None
         if with_input:
             alert.addButtonWithTitle_("取消")
             field = NSTextField.alloc().initWithFrame_(NSRect(NSPoint(0, 0), NSSize(250, 24)))
-            field.setPlaceholderString_("XXXX-XXXX-XXXX-XXXX")
+            field.setPlaceholderString_("激活码")
             field.setEditable_(True)
             field.setSelectable_(True)
             field.setBezeled_(True)
             field.setDrawsBackground_(True)
             alert.setAccessoryView_(field)
-            alert.window().makeKeyAndOrderFront_(None)
             alert.window().makeFirstResponder_(field)
         
         result = alert.runModal()
-        NSApp.setActivationPolicy_(policy)
+        NSApp.setActivationPolicy_(2)
         
         if with_input:
             return (result == 1000, field.stringValue().strip() if result == 1000 else "")
         return result == 1000
     
-    @objc.IBAction
-    def copyMachineCode_(self, sender):
-        """复制机器码"""
+    def setup_menu(self):
+        """设置菜单"""
         from .license_manager import license_manager
-        self._copy_to_clipboard(license_manager.machine_code)
-        self.send_notification("已复制", f"机器码 {license_manager.machine_code}")
+        from .permission import check_accessibility
+        
+        status, code, remaining = license_manager.get_status()
+        menu = NSMenu.alloc().init()
+        
+        # 许可信息
+        if status != "activated":
+            title = f"试用期 (剩余 {remaining} 天)" if status == "trial" else "⚠ 试用期已结束"
+            _add_menu_item(menu, self, title, enabled=False)
+            _add_menu_item(menu, self, "激活 / 购买...", "showActivationInput:")
+        else:
+             _add_menu_item(menu, self, "✓ 已激活", enabled=False)
+
+        menu.addItem_(NSMenuItem.separatorItem())
+        
+        # 功能区
+        self.files_header = _add_menu_item(menu, self, "无待移动文件", enabled=False)
+        _add_menu_item(menu, self, "清空列表", "clearCut:")
+        
+        menu.addItem_(NSMenuItem.separatorItem())
+        
+        # 设置区
+        perm_ok = check_accessibility()
+        if not perm_ok:
+            _add_menu_item(menu, self, "⚠ 未授权 (点击修复)", "checkPermission:")
+        
+        self.autostart_item = _add_menu_item(menu, self, "开机自启", "toggleAutostart:")
+        self.autostart_item.setState_(1 if self._is_autostart_enabled() else 0)
+        
+        menu.addItem_(NSMenuItem.separatorItem())
+        _add_menu_item(menu, self, "关于", "showAbout:")
+        _add_menu_item(menu, self, "退出", "quit:", "q")
+        
+        self.menu = menu
+        self.status_item.setMenu_(menu)
     
     @objc.IBAction
     def showActivationInput_(self, sender):
-        """激活码输入"""
+        """激活/购买"""
         from .license_manager import license_manager
-        ok, code = self._show_alert("输入激活码", f"机器码: {license_manager.machine_code}\n\n请输入激活码：", True)
-        if not ok:
-            return
-        if license_manager.activate(code):
-            self._show_alert("激活成功", "感谢支持！请重启应用。")
-            self.setup_menu()
-        else:
-            self._show_alert("激活失败", "激活码无效，请检查。")
-    
+        from AppKit import NSAlert, NSApp
+        
+        NSApp.setActivationPolicy_(0)
+        NSApp.activateIgnoringOtherApps_(True)
+        
+        while True:
+            alert = NSAlert.alloc().init()
+            alert.setMessageText_("CommondX 激活")
+            alert.setInformativeText_(f"机器码: {license_manager.machine_code}\n\n请选择操作：")
+            alert.addButtonWithTitle_("⭐ 购买激活码")
+            alert.addButtonWithTitle_("输入激活码")
+            alert.addButtonWithTitle_("复制机器码")
+            alert.addButtonWithTitle_("关闭")
+            
+            resp = alert.runModal()
+            
+            if resp == 1000:  # 购买激活码
+                self.openBuyPage_(sender)
+                # 继续显示弹窗
+            elif resp == 1001:  # 输入激活码
+                ok, code = self._show_alert("🔑 输入激活码", "请输入激活码：", True)
+                if ok and code:
+                    if license_manager.activate(code):
+                        self._show_alert("🎉 激活成功", "感谢支持！祝您使用愉快～")
+                        self.setup_menu()
+                        break  # 激活成功退出
+                    else:
+                        self._show_alert("❌ 激活失败", "激活码无效，请检查后重试")
+                # 继续显示弹窗
+            elif resp == 1002:  # 复制机器码
+                self._copy_to_clipboard(license_manager.machine_code)
+                self.send_notification("✅ 已复制", "机器码已复制到剪贴板")
+                # 继续显示弹窗
+            else:  # 关闭
+                break
+        
+        NSApp.setActivationPolicy_(2)
+
+    @objc.IBAction
+    def copyMachineCode_(self, sender):
+         self._copy_to_clipboard(sender)
+         
     @objc.IBAction
     def openBuyPage_(self, sender):
-        """打开购买页面"""
+        """打开购买"""
         from AppKit import NSWorkspace, NSURL
         from .license_manager import license_manager
         NSWorkspace.sharedWorkspace().openURL_(NSURL.URLWithString_("https://wj.qq.com/s2/25468218/6ee1/"))
         self._copy_to_clipboard(license_manager.machine_code)
-        self.send_notification("已打开购买页面", f"机器码已复制: {license_manager.machine_code}")
+
     
     def show_activation_required(self):
         """提示需要激活"""
         from .license_manager import license_manager
-        self.send_notification("试用期已结束", f"机器码: {license_manager.machine_code}")
+        self.send_notification("⏰ 试用期已结束", f"机器码: {license_manager.machine_code}")
     
     @objc.IBAction
     def clearCut_(self, sender):
         self.cut_manager.clear()
-        self.send_notification("已清空", "剪切列表已清空")
+        self.send_notification("🗑️ 已清空", "剪切列表已清空")
     
     @objc.IBAction
     def checkPermission_(self, sender):
@@ -248,9 +269,9 @@ class StatusBarIcon(NSObject):
             if not ok:
                 open_accessibility_settings()
         
-        self.permission_item.setTitle_("✓ 已授权" if ok else "⚠ 未授权")
         if ok:
-            self.send_notification("权限检查", "已获得辅助功能权限")
+            self.send_notification("✅ 权限检查", "已获得辅助功能权限")
+            self.setup_menu()  # 刷新菜单隐藏权限项
     
     @objc.IBAction
     def openAccessibilitySettings_(self, sender):
@@ -262,7 +283,7 @@ class StatusBarIcon(NSObject):
         from .launch_agent import toggle_autostart
         enabled = toggle_autostart()
         self.autostart_item.setState_(1 if enabled else 0)
-        self.send_notification("开机自启", "已开启" if enabled else "已关闭")
+        self.send_notification("⚙️ 开机自启", "✅ 已开启" if enabled else "❌ 已关闭")
     
     def _is_autostart_enabled(self):
         try:
@@ -275,7 +296,7 @@ class StatusBarIcon(NSObject):
     def showAbout_(self, sender):
         from AppKit import NSApp
         NSApp.activateIgnoringOtherApps_(True)
-        self._show_alert("CommondX", "Mac 文件剪切移动工具\n\n• Cmd+X 剪切\n• Cmd+V 移动\n\n版本: 1.0.0\n作者: Cedar")
+        self._show_alert("✂️ CommondX", "Mac 文件剪切移动工具\n\n• Cmd+X 剪切\n• Cmd+V 移动\n\n版本: 1.0.0\n作者: Cedar 🐱")
     
     @objc.IBAction
     def quit_(self, sender):
