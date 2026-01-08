@@ -53,14 +53,22 @@ class CutManager:
         return []
     
     def get_finder_current_folder(self) -> str:
-        """获取 Finder 当前打开的文件夹路径"""
+        """获取 Finder 当前打开的文件夹路径（支持桌面）"""
         script = '''
         tell application "Finder"
             try
-                set currentFolder to (POSIX path of (target of front window as alias))
-                return currentFolder
+                -- 没有打开窗口时，默认为桌面
+                if (count of windows) = 0 then
+                    return POSIX path of (path to desktop)
+                end if
+                set frontWindow to front window
+                -- 检测桌面窗口
+                if name of frontWindow is "桌面" or name of frontWindow is "Desktop" then
+                    return POSIX path of (path to desktop)
+                end if
+                return POSIX path of (target of frontWindow as alias)
             on error
-                return ""
+                return POSIX path of (path to desktop)
             end try
         end tell
         '''

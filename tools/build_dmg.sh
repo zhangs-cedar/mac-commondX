@@ -11,6 +11,9 @@ VERSION="1.0.0"
 
 echo "=== $APP_NAME 打包 ==="
 
+# 清除旧的辅助功能授权记录
+tccutil reset Accessibility com.liuns.commondx 2>/dev/null || true
+
 rm -rf build dist *.dmg
 
 pyinstaller tools/CommondX.spec --noconfirm
