@@ -29,9 +29,9 @@
 
 ## 📦 下载安装
 
-| 版本 | 下载链接 | 更新日期 |
-|:---:|:---|:---:|
-| **v1.0.0** | [CommondX-1.0.0.dmg](https://github.com/zhangs-cedar/mac-commondX/releases/download/1.0.0/CommondX-1.0.0.dmg) | 2026-01-08 |
+### v1.0.0 (2026-01-08)
+- 📥 [CommondX-1.0.0.dmg](https://github.com/zhangs-cedar/mac-commondX/releases/download/1.0.0/CommondX-1.0.0.dmg)
+- 首个正式版本，支持 Cmd+X 剪切、Cmd+V 移动
 
 > 💡 下载后双击 DMG 文件，将 CommondX 拖入 Applications 文件夹即可
 
@@ -58,17 +58,7 @@
 
 本项目采用 CC BY-NC 4.0 协议发布。
 
-✅ 你可以：
-  - 自由分享、复制本项目
-  - 修改、二次开发
-
-⚠️ 但必须：
-  - 注明原作者和出处
-  - 不得用于商业目的
-
-❌ 禁止：
-  - 将本项目用于商业用途
-  - 去除版权声明
+✅ 允许学习、修改、分享 | ❌ 禁止商业使用
 
 > 💡 代码开源供学习，禁止商业使用。激活码收费支持作者持续维护 ❤️
 
