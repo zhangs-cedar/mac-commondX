@@ -10,6 +10,10 @@ def _run_script(script: str, timeout: int = 5) -> str:
     """执行 AppleScript，返回输出"""
     try:
         r = subprocess.run(['osascript', '-e', script], capture_output=True, text=True, timeout=timeout)
+        print(f"[DEBUG] AppleScript returncode={r.returncode}")
+        print(f"[DEBUG] stdout: {r.stdout[:200] if r.stdout else '(empty)'}")
+        if r.stderr:
+            print(f"[DEBUG] stderr: {r.stderr[:200]}")
         return r.stdout.strip() if r.returncode == 0 else ""
     except Exception as e:
         print(f"AppleScript 执行失败: {e}")
@@ -38,15 +42,26 @@ class CutManager:
     
     def get_finder_selection(self) -> list:
         """获取 Finder 选中的文件"""
-        script = '''tell application "Finder"
-            set paths to {}
-            repeat with f in selection
-                copy POSIX path of (f as alias) to end of paths
+        script = '''
+        tell application "Finder"
+            set selectedItems to selection
+            set pathList to {}
+            repeat with itemRef in selectedItems
+                set itemPath to POSIX path of (itemRef as alias)
+                copy itemPath to end of pathList
             end repeat
-            return paths
-        end tell'''
+            return pathList
+        end tell
+        '''
+        print("[DEBUG] 获取 Finder 选中文件...")
         output = _run_script(script)
-        return [p.strip() for p in output.split(', ') if p.strip()] if output else []
+        print(f"[DEBUG] 原始输出: '{output}'")
+        if output:
+            result = [p.strip() for p in output.split(', ') if p.strip()]
+        else:
+            result = []
+        print(f"[DEBUG] 解析结果: {result}")
+        return result
     
     def get_finder_current_folder(self) -> str:
         """获取 Finder 当前文件夹"""

@@ -8,7 +8,7 @@ from pathlib import Path
 from cedar.utils import print, create_name
 import os
 os.environ['LOG_PATH'] = str(Path(__file__).parent / "logs" / f"{create_name()}commondx.log")
-
+print(os.environ['LOG_PATH'])
 # 添加 src 路径
 sys.path.insert(0, str(Path(__file__).parent))
 

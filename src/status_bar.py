@@ -176,10 +176,12 @@ class StatusBarIcon(NSObject):
         
         menu.addItem_(NSMenuItem.separatorItem())
         
-        # 设置区
+        # 权限状态
         perm_ok = check_accessibility()
-        if not perm_ok:
-            _add_menu_item(menu, self, "⚠ 未授权 (点击修复)", "checkPermission:")
+        if perm_ok:
+            _add_menu_item(menu, self, "已获得系统权限", enabled=False)
+        else:
+            _add_menu_item(menu, self, "未获得系统权限 (点击授权)", "checkPermission:")
         
         self.autostart_item = _add_menu_item(menu, self, "开机自启", "toggleAutostart:")
         self.autostart_item.setState_(1 if self._is_autostart_enabled() else 0)
