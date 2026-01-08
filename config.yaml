@@ -1,11 +1,10 @@
-# CommondX 配置文件
-
-# 通知设置
+license:
+  activation_code: ''
+  trial_days: 3
+  trial_start: 1767851991.524626
 notifications:
   enabled: true
   sound: true
-
-# 快捷键（预留，当前使用系统默认 Cmd+X/V）
 shortcuts:
-  cut: "cmd+x"
-  paste: "cmd+v"
+  cut: cmd+x
+  paste: cmd+v
