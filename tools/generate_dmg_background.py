@@ -1,55 +1,44 @@
 #!/usr/bin/env python3
-"""生成 DMG 安装背景图 - 匹配新版图标风格"""
+"""生成 DMG 安装背景图"""
 
 from pathlib import Path
-try:
-    from PIL import Image, ImageDraw, ImageFont
-except ImportError:
-    import subprocess
-    subprocess.run(["pip", "install", "Pillow"], check=True)
-    from PIL import Image, ImageDraw, ImageFont
+import cv2
+import numpy as np
+from cedar.draw import putText
 
 def create_dmg_background():
-    """创建简约 DMG 背景图"""
     width, height = 640, 480
-    bg_color = (250, 250, 250)  # 近似纯白，带一点暖色
-    arrow_color = (255, 90, 60)  # 与图标一致的橙色
+    bg_color = (250, 250, 250)  # RGB
+    arrow_color = (60, 90, 255)  # BGR (橙色)
     
-    img = Image.new('RGB', (width, height), bg_color)
-    draw = ImageDraw.Draw(img)
+    # 创建白色背景 (BGR)
+    img = np.full((height, width, 3), bg_color[::-1], dtype=np.uint8)
     
-    # 绘制简单的箭头 (从图标指向 Applications)
-    # 箭头位置调整：图标大概在 (160, 240)，App文件夹在 (480, 240)
+    # 箭头 (图标 -> Applications)
     arrow_y = 240
-    arrow_start = 240  # 图标右侧
-    arrow_end = 400    # 文件夹左侧
+    arrow_start, arrow_end = 240, 400
     
-    # 虚线箭头
-    dash_len = 10
-    for x in range(arrow_start, arrow_end, dash_len * 2):
-        draw.line([(x, arrow_y), (min(x + dash_len, arrow_end), arrow_y)], 
-                 fill=arrow_color, width=2)
+    # 虚线
+    for x in range(arrow_start, arrow_end, 20):
+        cv2.line(img, (x, arrow_y), (min(x + 10, arrow_end), arrow_y), 
+                arrow_color, 2)
     
     # 箭头头部
-    draw.polygon([
-        (arrow_end, arrow_y),
-        (arrow_end - 10, arrow_y - 6),
-        (arrow_end - 10, arrow_y + 6),
-    ], fill=arrow_color)
+    pts = np.array([
+        [arrow_end, arrow_y],
+        [arrow_end - 10, arrow_y - 6],
+        [arrow_end - 10, arrow_y + 6]
+    ], np.int32)
+    cv2.fillPoly(img, [pts], arrow_color)
     
-    # 文字提示
-    try:
-        font = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 13)
-    except:
-        font = ImageFont.load_default()
+    # 文字 (中文) - 使用 putText
+    text = "拖拽到 Applications 文件夹安装"
+    img = putText(img, text, (200, height - 100), 
+                 text_color=(10, 10, 10), text_size=18)
     
-    text = "Drag to install"
-    bbox = draw.textbbox((0, 0), text, font=font)
-    text_w = bbox[2] - bbox[0]
-    draw.text(((width - text_w)//2, height - 100), text, fill=(150, 150, 150), font=font)
-    
+    # 保存 (OpenCV 使用 BGR，PIL 需要 RGB)
     output_path = Path(__file__).parent / "dmg_background.png"
-    img.save(output_path, "PNG")
+    cv2.imwrite(str(output_path), img)
     print(f"✅ DMG 背景图已生成: {output_path}")
 
 if __name__ == "__main__":
