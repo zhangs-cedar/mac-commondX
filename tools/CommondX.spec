@@ -53,7 +53,7 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name='CommondX.app',
-    icon=None,
+    icon=os.path.join(SPEC_DIR, 'CommondX.icns'),
     bundle_identifier='com.liuns.commondx',
     info_plist={
         'CFBundleName': 'CommondX',
