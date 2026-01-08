@@ -294,8 +294,22 @@ class StatusBarIcon(NSObject):
     @objc.IBAction
     def showActivationInput_(self, sender):
         """显示激活码输入框"""
-        from AppKit import NSAlert, NSTextField, NSApp
+        from AppKit import NSAlert, NSTextField, NSApp, NSRunningApplication, NSApplicationActivateIgnoringOtherApps
         from .license_manager import license_manager
+        
+        print(f"[DEBUG] showActivationInput_ called, current policy: {NSApp.activationPolicy()}")
+        
+        # 临时切换到 regular 模式以获取键盘焦点
+        original_policy = NSApp.activationPolicy()
+        NSApp.setActivationPolicy_(0)  # NSApplicationActivationPolicyRegular
+        
+        print(f"[DEBUG] After setActivationPolicy_(0), policy: {NSApp.activationPolicy()}")
+        
+        # 强制激活应用到前台
+        NSApp.activateIgnoringOtherApps_(True)
+        activate_result = NSRunningApplication.currentApplication().activateWithOptions_(NSApplicationActivateIgnoringOtherApps)
+        
+        print(f"[DEBUG] activateWithOptions_ result: {activate_result}, isActive: {NSRunningApplication.currentApplication().isActive()}")
         
         alert = NSAlert.alloc().init()
         alert.setMessageText_("输入激活码")
@@ -311,14 +325,19 @@ class StatusBarIcon(NSObject):
         input_field.setDrawsBackground_(True)
         alert.setAccessoryView_(input_field)
         
-        # 激活窗口并聚焦输入框
-        NSApp.activateIgnoringOtherApps_(True)
+        # 让 alert 窗口成为 key window 并聚焦输入框
+        alert.window().makeKeyAndOrderFront_(None)
         alert.window().makeFirstResponder_(input_field)
+        
+        print(f"[DEBUG] Before runModal, isKeyWindow: {alert.window().isKeyWindow()}, isActive: {NSRunningApplication.currentApplication().isActive()}")
         
         response = alert.runModal()
         
+        print(f"[DEBUG] After runModal, response: {response}")
+        
         if response == 1000:  # 点击了激活
             code = input_field.stringValue().strip()
+            print(f"[DEBUG] Trying to activate with code: {code[:4]}...")
             if license_manager.activate(code):
                 # 激活成功弹窗
                 success_alert = NSAlert.alloc().init()
@@ -334,6 +353,10 @@ class StatusBarIcon(NSObject):
                 fail_alert.setInformativeText_("激活码无效，请检查是否输入正确。\n\n如有问题请联系开发者。")
                 fail_alert.addButtonWithTitle_("确定")
                 fail_alert.runModal()
+        
+        # 恢复 accessory 模式 (移到所有弹窗之后)
+        NSApp.setActivationPolicy_(original_policy)
+        print(f"[DEBUG] Policy restored to: {NSApp.activationPolicy()}")
     
     @objc.IBAction
     def openBuyPage_(self, sender):
