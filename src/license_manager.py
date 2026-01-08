@@ -17,7 +17,7 @@ from cedar.utils import print
 
 # 配置常量
 SECRET_KEY = b"cedar_commondx_2026_secret"
-TRIAL_DAYS = 3
+TRIAL_DAYS = 21
 
 # 用户数据文件
 USER_DATA = Path.home() / "Library/Application Support/CommondX/user.yaml"

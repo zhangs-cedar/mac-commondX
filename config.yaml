@@ -1,7 +1,7 @@
 # CommondX 配置文件
 
 license:
-  trial_days: 3
+  trial_days: 21
 
 notifications:
   enabled: true
