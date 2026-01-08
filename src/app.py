@@ -11,6 +11,7 @@ from pathlib import Path
 import objc
 from Foundation import NSObject
 from AppKit import NSApplication
+from cedar.utils import print
 
 # 导入模块
 from .event_tap import EventTap, check_accessibility, request_accessibility

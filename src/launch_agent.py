@@ -4,6 +4,7 @@
 import os
 import plistlib
 import subprocess
+from cedar.utils import print
 
 APP_ID = "com.liuns.commondx"
 PLIST_NAME = f"{APP_ID}.plist"

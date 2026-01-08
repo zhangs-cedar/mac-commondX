@@ -10,6 +10,7 @@ CommondX 激活码生成工具
 import sys
 import hashlib
 import hmac
+from cedar.utils import print
 
 # 必须与 src/license_manager.py 中的密钥一致
 SECRET_KEY = b"cedar_commondx_2026_secret"

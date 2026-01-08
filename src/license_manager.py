@@ -13,6 +13,7 @@ import json
 import time
 from pathlib import Path
 from typing import Tuple
+from cedar.utils import print
 
 # 配置
 APP_NAME = "CommondX"

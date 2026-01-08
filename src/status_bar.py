@@ -9,6 +9,7 @@ from AppKit import (
     NSApplication, NSUserNotificationCenter, NSUserNotification,
     NSAffineTransform
 )
+from cedar.utils import print
 
 
 class StatusBarIcon(NSObject):
@@ -304,9 +305,16 @@ class StatusBarIcon(NSObject):
         
         input_field = NSTextField.alloc().initWithFrame_(NSRect(NSPoint(0, 0), NSSize(250, 24)))
         input_field.setPlaceholderString_("XXXX-XXXX-XXXX-XXXX")
+        input_field.setEditable_(True)
+        input_field.setSelectable_(True)
+        input_field.setBezeled_(True)
+        input_field.setDrawsBackground_(True)
         alert.setAccessoryView_(input_field)
         
+        # 激活窗口并聚焦输入框
         NSApp.activateIgnoringOtherApps_(True)
+        alert.window().makeFirstResponder_(input_field)
+        
         response = alert.runModal()
         
         if response == 1000:  # 点击了激活

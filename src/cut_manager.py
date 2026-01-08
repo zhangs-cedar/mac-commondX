@@ -4,6 +4,7 @@
 import subprocess
 from pathlib import Path
 from typing import List, Tuple, Optional, Callable
+from cedar.utils import print
 
 
 class CutManager:

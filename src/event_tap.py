@@ -12,6 +12,7 @@ from Quartz import (
 from Foundation import NSRunLoop, NSDefaultRunLoopMode
 from AppKit import NSWorkspace
 import threading
+from cedar.utils import print
 
 
 # macOS 键码
