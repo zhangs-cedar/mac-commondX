@@ -53,9 +53,24 @@
 本项目完全开源，欢迎 Star ⭐ 和 PR！
 
 - GitHub: [zhangs-cedar/mac-commondX](https://github.com/zhangs-cedar/mac-commondX)
-- 开源协议: MIT License
+- 开源协议: [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) (非商业使用)
 
-> 💡 代码开源，激活码收费是为了支持作者持续维护和更新，感谢理解 ❤️
+
+本项目采用 CC BY-NC 4.0 协议发布。
+
+✅ 你可以：
+  - 自由分享、复制本项目
+  - 修改、二次开发
+
+⚠️ 但必须：
+  - 注明原作者和出处
+  - 不得用于商业目的
+
+❌ 禁止：
+  - 将本项目用于商业用途
+  - 去除版权声明
+
+> 💡 代码开源供学习，禁止商业使用。激活码收费支持作者持续维护 ❤️
 
 ## 📮 联系作者
 
