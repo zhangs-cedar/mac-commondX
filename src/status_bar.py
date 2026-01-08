@@ -320,10 +320,20 @@ class StatusBarIcon(NSObject):
         if response == 1000:  # 点击了激活
             code = input_field.stringValue().strip()
             if license_manager.activate(code):
-                self.send_notification("激活成功", "感谢您的支持！请重启应用。")
+                # 激活成功弹窗
+                success_alert = NSAlert.alloc().init()
+                success_alert.setMessageText_("激活成功")
+                success_alert.setInformativeText_("感谢您的支持！\n\n请重启应用以完成激活。")
+                success_alert.addButtonWithTitle_("确定")
+                success_alert.runModal()
                 self.setup_menu()  # 刷新菜单
             else:
-                self.send_notification("激活失败", "激活码无效，请检查是否输入正确")
+                # 激活失败弹窗
+                fail_alert = NSAlert.alloc().init()
+                fail_alert.setMessageText_("激活失败")
+                fail_alert.setInformativeText_("激活码无效，请检查是否输入正确。\n\n如有问题请联系开发者。")
+                fail_alert.addButtonWithTitle_("确定")
+                fail_alert.runModal()
     
     @objc.IBAction
     def openBuyPage_(self, sender):
