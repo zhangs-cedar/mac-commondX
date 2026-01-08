@@ -35,6 +35,8 @@
 
 ### v1.0.0 (2026-01-08)
 - 📥 [CommondX-1.0.0.dmg](https://github.com/zhangs-cedar/mac-commondX/releases/download/1.0.0/CommondX-1.0.0.dmg)
+
+
 - 首个正式版本，支持 Cmd+X 剪切、Cmd+V 移动
 
 > 💡 下载后双击 DMG 文件，将 CommondX 拖入 Applications 文件夹即可
