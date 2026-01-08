@@ -1,10 +1,12 @@
+# CommondX 配置文件
+
 license:
-  activation_code: ''
-  trial_days: 30
-  trial_start: 1767851991.524626
+  trial_days: 3
+
 notifications:
   enabled: true
   sound: true
+
 shortcuts:
   cut: cmd+x
   paste: cmd+v

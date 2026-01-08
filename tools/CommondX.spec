@@ -9,9 +9,7 @@ a = Analysis(
     [os.path.join(ROOT_DIR, 'main.py')],
     pathex=[ROOT_DIR],
     binaries=[],
-    datas=[
-        (os.path.join(ROOT_DIR, 'config.yaml'), '.'),
-    ],
+    datas=[],
     hiddenimports=[
         'Foundation',
         'AppKit',
