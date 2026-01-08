@@ -11,6 +11,16 @@ from AppKit import (
 from cedar.utils import print
 
 
+def _add_menu_item(menu, target, title, action=None, key="", enabled=True):
+    """创建菜单项（类外函数避免 PyObjC 冲突）"""
+    item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(title, action, key)
+    if action:
+        item.setTarget_(target)
+    item.setEnabled_(enabled)
+    menu.addItem_(item)
+    return item
+
+
 class StatusBarIcon(NSObject):
     """状态栏图标"""
     
@@ -105,15 +115,6 @@ class StatusBarIcon(NSObject):
         self.status_item.setImage_(image)
         self.status_item.setTitle_(f" {count}" if count > 0 else "")
     
-    def _item(self, menu, title, action=None, key="", enabled=True):
-        """创建菜单项"""
-        item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(title, action, key)
-        if action:
-            item.setTarget_(self)
-        item.setEnabled_(enabled)
-        menu.addItem_(item)
-        return item
-    
     def setup_menu(self):
         """设置菜单"""
         from .license_manager import license_manager
@@ -124,34 +125,34 @@ class StatusBarIcon(NSObject):
         
         # 许可状态
         if status == "activated":
-            self._item(menu, "✓ 已激活", enabled=False)
+            _add_menu_item(menu, self, "✓ 已激活", enabled=False)
         else:
             title = f"试用期 (剩余 {remaining} 天)" if status == "trial" else "⚠ 试用期已结束"
-            self._item(menu, title, enabled=False)
-            self._item(menu, f"机器码: {code}", "copyMachineCode:")
-            self._item(menu, "输入激活码...", "showActivationInput:")
-            self._item(menu, "购买激活码 (¥2.00)", "openBuyPage:")
+            _add_menu_item(menu, self, title, enabled=False)
+            _add_menu_item(menu, self, f"机器码: {code}", "copyMachineCode:")
+            _add_menu_item(menu, self, "输入激活码...", "showActivationInput:")
+            _add_menu_item(menu, self, "购买激活码 (¥2.00)", "openBuyPage:")
         
         menu.addItem_(NSMenuItem.separatorItem())
-        self.files_header = self._item(menu, "无待移动文件", enabled=False)
+        self.files_header = _add_menu_item(menu, self, "无待移动文件", enabled=False)
         menu.addItem_(NSMenuItem.separatorItem())
-        self._item(menu, "清空剪切列表", "clearCut:")
+        _add_menu_item(menu, self, "清空剪切列表", "clearCut:")
         menu.addItem_(NSMenuItem.separatorItem())
         
         # 权限
         perm_ok = check_accessibility()
-        self.permission_item = self._item(menu, "✓ 已授权" if perm_ok else "⚠ 未授权", enabled=False)
-        self._item(menu, "检查权限", "checkPermission:")
-        self._item(menu, "打开辅助功能设置", "openAccessibilitySettings:")
+        self.permission_item = _add_menu_item(menu, self, "✓ 已授权" if perm_ok else "⚠ 未授权", enabled=False)
+        _add_menu_item(menu, self, "检查权限", "checkPermission:")
+        _add_menu_item(menu, self, "打开辅助功能设置", "openAccessibilitySettings:")
         menu.addItem_(NSMenuItem.separatorItem())
         
         # 自启
-        self.autostart_item = self._item(menu, "开机自启", "toggleAutostart:")
+        self.autostart_item = _add_menu_item(menu, self, "开机自启", "toggleAutostart:")
         self.autostart_item.setState_(1 if self._is_autostart_enabled() else 0)
         menu.addItem_(NSMenuItem.separatorItem())
         
-        self._item(menu, "关于 CommondX", "showAbout:")
-        self._item(menu, "退出", "quit:", "q")
+        _add_menu_item(menu, self, "关于 CommondX", "showAbout:")
+        _add_menu_item(menu, self, "退出", "quit:", "q")
         
         self.menu = menu
         self.status_item.setMenu_(menu)
