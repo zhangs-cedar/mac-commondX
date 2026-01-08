@@ -1,15 +1,16 @@
 # -*- mode: python ; coding: utf-8 -*-
 """PyInstaller 打包配置"""
 
-block_cipher = None
+import os
+SPEC_DIR = os.path.dirname(os.path.abspath(SPEC))
+ROOT_DIR = os.path.dirname(SPEC_DIR)
 
 a = Analysis(
-    ['commondx.py'],
-    pathex=[],
+    [os.path.join(ROOT_DIR, 'main.py')],
+    pathex=[ROOT_DIR],
     binaries=[],
     datas=[
-        ('config.yaml', '.'),
-        ('resources', 'resources'),
+        (os.path.join(ROOT_DIR, 'config.yaml'), '.'),
     ],
     hiddenimports=[
         'Foundation',
@@ -19,18 +20,15 @@ a = Analysis(
         'PyObjCTools',
         'PyObjCTools.AppHelper',
         'objc',
+        'yaml',
     ],
     hookspath=[],
-    hooksconfig={},
     runtime_hooks=[],
     excludes=[],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher,
     noarchive=False,
 )
 
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+pyz = PYZ(a.pure, a.zipped_data)
 
 exe = EXE(
     pyz,
@@ -39,15 +37,9 @@ exe = EXE(
     exclude_binaries=True,
     name='CommondX',
     debug=False,
-    bootloader_ignore_signals=False,
     strip=False,
     upx=True,
     console=False,
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
 )
 
 coll = COLLECT(
@@ -57,14 +49,13 @@ coll = COLLECT(
     a.datas,
     strip=False,
     upx=True,
-    upx_exclude=[],
     name='CommondX',
 )
 
 app = BUNDLE(
     coll,
     name='CommondX.app',
-    icon='resources/icon.icns',
+    icon=None,
     bundle_identifier='com.liuns.commondx',
     info_plist={
         'CFBundleName': 'CommondX',
@@ -72,7 +63,7 @@ app = BUNDLE(
         'CFBundleVersion': '1.0.0',
         'CFBundleShortVersionString': '1.0.0',
         'LSMinimumSystemVersion': '10.15',
-        'LSUIElement': True,  # 不显示 Dock 图标
+        'LSUIElement': True,
         'NSHighResolutionCapable': True,
         'NSAppleEventsUsageDescription': 'CommondX 需要控制 Finder 来获取选中的文件',
         'NSAccessibilityUsageDescription': 'CommondX 需要辅助功能权限来监听全局快捷键',
