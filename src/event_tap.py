@@ -122,18 +122,3 @@ class EventTap:
         print("Event Tap 已停止")
 
 
-def check_accessibility():
-    """检查辅助功能权限"""
-    from ApplicationServices import AXIsProcessTrusted
-    return AXIsProcessTrusted()
-
-
-def request_accessibility():
-    """请求辅助功能权限"""
-    from ApplicationServices import AXIsProcessTrustedWithOptions
-    from Foundation import NSDictionary
-    
-    options = NSDictionary.dictionaryWithObject_forKey_(
-        True, "AXTrustedCheckOptionPrompt"
-    )
-    return AXIsProcessTrustedWithOptions(options)

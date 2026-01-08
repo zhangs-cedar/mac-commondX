@@ -256,6 +256,28 @@ class StatusBarIcon(NSObject):
         
         menu.addItem_(NSMenuItem.separatorItem())
         
+        # 权限状态
+        from .permission import check_accessibility
+        permission_ok = check_accessibility()
+        self.permission_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "✓ 已授权" if permission_ok else "⚠ 未授权", None, ""
+        )
+        self.permission_item.setEnabled_(False)
+        menu.addItem_(self.permission_item)
+        
+        # 检查权限 / 打开设置
+        check_perm_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "检查权限", "checkPermission:", "")
+        check_perm_item.setTarget_(self)
+        menu.addItem_(check_perm_item)
+        
+        open_settings_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "打开辅助功能设置", "openAccessibilitySettings:", "")
+        open_settings_item.setTarget_(self)
+        menu.addItem_(open_settings_item)
+        
+        menu.addItem_(NSMenuItem.separatorItem())
+        
         # 开机自启
         self.autostart_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
             "开机自启", "toggleAutostart:", "")
@@ -387,6 +409,35 @@ class StatusBarIcon(NSObject):
         """清空剪切列表"""
         self.cut_manager.clear()
         self.send_notification("已清空", "剪切列表已清空")
+    
+    @objc.IBAction
+    def checkPermission_(self, sender):
+        """检查权限"""
+        from .permission import check_accessibility
+        
+        # 获取 app delegate
+        app_delegate = NSApplication.sharedApplication().delegate()
+        if app_delegate and hasattr(app_delegate, 'retry_permission_check'):
+            if app_delegate.retry_permission_check():
+                self.permission_item.setTitle_("✓ 已授权")
+                self.send_notification("权限检查", "已获得辅助功能权限")
+            else:
+                self.permission_item.setTitle_("⚠ 未授权")
+        else:
+            # 直接检查
+            if check_accessibility():
+                self.permission_item.setTitle_("✓ 已授权")
+                self.send_notification("权限检查", "已获得辅助功能权限")
+            else:
+                self.permission_item.setTitle_("⚠ 未授权")
+                from .permission import open_accessibility_settings
+                open_accessibility_settings()
+    
+    @objc.IBAction
+    def openAccessibilitySettings_(self, sender):
+        """打开辅助功能设置"""
+        from .permission import open_accessibility_settings
+        open_accessibility_settings()
     
     @objc.IBAction
     def toggleAutostart_(self, sender):
