@@ -17,19 +17,14 @@ SECRET_KEY = b"cedar_commondx_2026_secret"
 
 
 def generate_activation_code(machine_code: str) -> str:
-    """根据机器码生成激活码"""
+    """根据机器码生成激活码 (2位)"""
     machine_code = machine_code.strip().upper()
     
-    # 验证格式
     if not machine_code.startswith("CMDX-"):
         print(f"警告: 机器码格式不正确，应为 CMDX-XXXXXXXX")
     
-    # 计算 HMAC
     h = hmac.new(SECRET_KEY, machine_code.encode('utf-8'), hashlib.sha256)
-    hex_digest = h.hexdigest()[:16].upper()
-    
-    # 格式化为 XXXX-XXXX-XXXX-XXXX
-    return f"{hex_digest[:4]}-{hex_digest[4:8]}-{hex_digest[8:12]}-{hex_digest[12:16]}"
+    return h.hexdigest()[:2].upper()
 
 
 def main():

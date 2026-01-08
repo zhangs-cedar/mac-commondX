@@ -88,10 +88,9 @@ class LicenseManager:
         return start_time
     
     def _calculate_activation_code(self, machine_code: str) -> str:
-        """计算激活码 (HMAC-SHA256)"""
+        """计算激活码 (HMAC-SHA256, 2位)"""
         h = hmac.new(SECRET_KEY, machine_code.encode('utf-8'), hashlib.sha256)
-        hex_digest = h.hexdigest()[:16].upper()
-        return f"{hex_digest[:4]}-{hex_digest[4:8]}-{hex_digest[8:12]}-{hex_digest[12:16]}"
+        return h.hexdigest()[:2].upper()
     
     def verify_activation_code(self, code: str) -> bool:
         """验证激活码是否匹配当前机器"""
