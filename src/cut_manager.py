@@ -32,7 +32,6 @@ class CutManager:
         self.cut_files = []
         self.on_state_change = on_state_change
         self.last_selection = None  # 上一次选择的文件列表
-        self.same_selection_count = 0  # 连续相同选择的次数
     
     @property
     def has_cut_files(self) -> bool:
@@ -94,49 +93,52 @@ class CutManager:
         Returns:
             tuple: (success: bool, should_show_dialog: bool)
                 - success: 是否成功剪切
-                - should_show_dialog: 是否应该显示智能操作弹窗（连续两次相同选择）
+                - should_show_dialog: 是否应该显示智能操作弹窗（当前选择和上次相同）
         """
+        print("[DEBUG] cut_manager.cut() 进入")
+        
         files = self.get_finder_selection()
+        print(f"[DEBUG] cut_manager.cut() 获取的文件列表: {files}")
+        print(f"[DEBUG] cut_manager.cut() 当前 last_selection: {self.last_selection}")
+        
         if not files:
-            print("未选中文件")
+            print("[DEBUG] cut_manager.cut() 未选中文件")
             self.last_selection = None
-            self.same_selection_count = 0
+            print(f"[DEBUG] cut_manager.cut() 重置 last_selection=None")
             return False, False
         
         valid = [f for f in files if Path(f).exists()]
+        print(f"[DEBUG] cut_manager.cut() 验证后的文件列表: {valid}")
+        
         if not valid:
-            print("文件不存在")
+            print("[DEBUG] cut_manager.cut() 文件不存在")
             self.last_selection = None
-            self.same_selection_count = 0
+            print(f"[DEBUG] cut_manager.cut() 重置 last_selection=None")
             return False, False
         
         # 比较当前选择和上一次选择
-        if self._is_same_selection(valid, self.last_selection):
-            self.same_selection_count += 1
-        else:
-            # 选择不同，重置计数
-            self.same_selection_count = 1
+        print(f"[DEBUG] cut_manager.cut() 比较选择: current={valid}, last={self.last_selection}")
+        is_same = self._is_same_selection(valid, self.last_selection)
+        print(f"[DEBUG] cut_manager.cut() 选择比较结果: is_same={is_same}")
         
         # 更新上一次选择
+        old_last_selection = self.last_selection
         self.last_selection = valid.copy()
+        print(f"[DEBUG] cut_manager.cut() 更新 last_selection: {old_last_selection} -> {self.last_selection}")
         
-        # 判断是否应该显示弹窗（连续两次相同选择）
-        should_show_dialog = self.same_selection_count == 2
-        
-        # 如果是第二次相同选择，不执行剪切，只返回应该显示弹窗的标志
-        if should_show_dialog:
-            print(f"连续两次选择相同文件，触发智能操作")
+        # 如果和上次相同，触发弹窗；否则执行剪切
+        if is_same:
+            print("[DEBUG] cut_manager.cut() 选择与上次相同，触发智能操作")
+            print(f"[DEBUG] cut_manager.cut() 返回: (True, True)")
             return True, True
         
-        # 第三次及以后相同选择，保持静默
-        if self.same_selection_count > 2:
-            print(f"连续 {self.same_selection_count} 次选择相同文件，保持静默")
-            return True, False
-        
-        # 第一次选择，执行剪切
+        # 选择不同，执行剪切
+        print("[DEBUG] cut_manager.cut() 选择不同，执行剪切")
         self.cut_files = valid
-        print(f"已剪切 {len(valid)} 个文件")
+        print(f"[DEBUG] cut_manager.cut() 更新 cut_files: {self.cut_files}")
+        print(f"[DEBUG] cut_manager.cut() 已剪切 {len(valid)} 个文件")
         self._notify()
+        print(f"[DEBUG] cut_manager.cut() 返回: (True, False)")
         return True, False
     
     def paste(self) -> tuple:

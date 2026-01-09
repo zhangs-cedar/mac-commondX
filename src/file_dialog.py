@@ -45,8 +45,15 @@ def show_file_operations_dialog(files):
         files: 文件路径列表
         
     Returns:
-        str: 操作类型 "copy"、"compress"、"decompress" 或 None（取消）
+        tuple: (action: str, alert: NSAlert)
+            - action: 操作类型 "copy"、"compress"、"decompress" 或 None（取消）
+            - alert: 弹窗引用
     """
+    from cedar.utils import print
+    
+    print("[DEBUG] show_file_operations_dialog() 进入")
+    print(f"[DEBUG] show_file_operations_dialog() 文件列表: {files}")
+    
     NSApp.setActivationPolicy_(0)
     NSApp.activateIgnoringOtherApps_(True)
     
@@ -57,6 +64,7 @@ def show_file_operations_dialog(files):
     total_count = len(files)
     archive_count = sum(1 for f in files if _is_archive_file(f))
     has_regular_files = any(not _is_archive_file(f) for f in files)
+    print(f"[DEBUG] show_file_operations_dialog() 统计: total={total_count}, archive={archive_count}, has_regular={has_regular_files}")
     
     # 构建提示文本
     if total_count == 1:
@@ -109,23 +117,37 @@ def show_file_operations_dialog(files):
         alert.addButtonWithTitle_("智能解压")
         has_action_button = True
         action_type = "decompress"
+        print("[DEBUG] show_file_operations_dialog() 添加解压按钮")
     elif has_regular_files:
         # 有普通文件/文件夹，显示压缩按钮
         alert.addButtonWithTitle_("压缩为 ZIP")
         has_action_button = True
         action_type = "compress"
+        print("[DEBUG] show_file_operations_dialog() 添加压缩按钮")
     
     # 取消按钮
     alert.addButtonWithTitle_("取消")
+    print(f"[DEBUG] show_file_operations_dialog() 按钮配置: has_action_button={has_action_button}, action_type={action_type}")
     
+    # 在调用 runModal() 之前返回 alert 引用，以便外部可以关闭它
+    # 注意：runModal() 是阻塞的，返回时弹窗已关闭
+    print("[DEBUG] show_file_operations_dialog() 准备显示弹窗 (runModal)")
     result = alert.runModal()
+    print(f"[DEBUG] show_file_operations_dialog() 弹窗返回: result={result}")
     NSApp.setActivationPolicy_(2)
     
-    # 返回操作类型
+    # 返回操作类型和弹窗引用（虽然弹窗已关闭，但保留引用以便统一处理）
     # 按钮顺序：复制路径(1000), 压缩/解压(1001 如果存在), 取消(1001 或 1002)
     if result == 1000:
-        return "copy"
+        action = "copy"
+        print("[DEBUG] show_file_operations_dialog() 用户选择: 复制路径")
     elif result == 1001 and has_action_button:
-        return action_type
+        action = action_type
+        print(f"[DEBUG] show_file_operations_dialog() 用户选择: {action_type}")
     else:
-        return None
+        action = None
+        print("[DEBUG] show_file_operations_dialog() 用户选择: 取消")
+    
+    print(f"[DEBUG] show_file_operations_dialog() 返回: action={action}, alert={alert}")
+    print("[DEBUG] show_file_operations_dialog() 退出")
+    return action, alert
