@@ -21,6 +21,7 @@ class CommondXApp(NSObject):
         self = objc.super(CommondXApp, self).init()
         if self:
             self.cut_manager = self.event_tap = self.status_bar = None
+            self._dialog_showing = False  # 弹窗显示状态标志位
         return self
     
     def applicationDidFinishLaunching_(self, _):
@@ -104,10 +105,20 @@ class CommondXApp(NSObject):
         
         # 如果应该显示智能操作弹窗（连续两次相同选择）
         if should_show_dialog:
+            # 检查是否已有弹窗显示，防止多个弹窗同时出现
+            if self._dialog_showing:
+                print("[DEBUG] 弹窗已显示，跳过本次弹窗")
+                return True
+            
             files = self.cut_manager.last_selection
             if files:
-                action = show_file_operations_dialog(files)
-                self._handle_file_operation(action, files)
+                try:
+                    self._dialog_showing = True
+                    action = show_file_operations_dialog(files)
+                    self._handle_file_operation(action, files)
+                finally:
+                    # 确保无论是否出现异常，都重置标志位
+                    self._dialog_showing = False
             return True
         
         # 正常剪切操作
