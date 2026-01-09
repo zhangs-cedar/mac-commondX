@@ -31,6 +31,8 @@ class CutManager:
     def __init__(self, on_state_change=None):
         self.cut_files = []
         self.on_state_change = on_state_change
+        self.last_selection = None  # 上一次选择的文件列表
+        self.same_selection_count = 0  # 连续相同选择的次数
     
     @property
     def has_cut_files(self) -> bool:
@@ -79,22 +81,63 @@ class CutManager:
         end tell'''
         return _run_script(script)
     
-    def cut(self) -> bool:
-        """剪切选中的文件"""
+    def _is_same_selection(self, current: list, last: list) -> bool:
+        """判断两次选择是否相同（使用集合比较，忽略顺序）"""
+        if not current or not last:
+            return False
+        return set(current) == set(last)
+    
+    def cut(self) -> tuple:
+        """
+        剪切选中的文件
+        
+        Returns:
+            tuple: (success: bool, should_show_dialog: bool)
+                - success: 是否成功剪切
+                - should_show_dialog: 是否应该显示智能操作弹窗（连续两次相同选择）
+        """
         files = self.get_finder_selection()
         if not files:
             print("未选中文件")
-            return False
+            self.last_selection = None
+            self.same_selection_count = 0
+            return False, False
         
         valid = [f for f in files if Path(f).exists()]
         if not valid:
             print("文件不存在")
-            return False
+            self.last_selection = None
+            self.same_selection_count = 0
+            return False, False
         
+        # 比较当前选择和上一次选择
+        if self._is_same_selection(valid, self.last_selection):
+            self.same_selection_count += 1
+        else:
+            # 选择不同，重置计数
+            self.same_selection_count = 1
+        
+        # 更新上一次选择
+        self.last_selection = valid.copy()
+        
+        # 判断是否应该显示弹窗（连续两次相同选择）
+        should_show_dialog = self.same_selection_count == 2
+        
+        # 如果是第二次相同选择，不执行剪切，只返回应该显示弹窗的标志
+        if should_show_dialog:
+            print(f"连续两次选择相同文件，触发智能操作")
+            return True, True
+        
+        # 第三次及以后相同选择，保持静默
+        if self.same_selection_count > 2:
+            print(f"连续 {self.same_selection_count} 次选择相同文件，保持静默")
+            return True, False
+        
+        # 第一次选择，执行剪切
         self.cut_files = valid
         print(f"已剪切 {len(valid)} 个文件")
         self._notify()
-        return True
+        return True, False
     
     def paste(self) -> tuple:
         """粘贴（移动）文件"""

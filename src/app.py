@@ -10,6 +10,8 @@ from .cut_manager import CutManager
 from .status_bar import StatusBarIcon
 from .license_manager import license_manager
 from .permission import check_accessibility, request_accessibility, open_accessibility_settings
+from .file_dialog import show_file_operations_dialog
+from .archive_manager import compress_to_zip, decompress_archive
 
 
 class CommondXApp(NSObject):
@@ -94,10 +96,58 @@ class CommondXApp(NSObject):
         """Cmd+X 回调"""
         if not self._check_license():
             return True
-        if self.cut_manager.cut():
-            self.status_bar.send_notification("已剪切", f"{self.cut_manager.count} 个文件待移动")
+        
+        success, should_show_dialog = self.cut_manager.cut()
+        
+        if not success:
+            return False
+        
+        # 如果应该显示智能操作弹窗（连续两次相同选择）
+        if should_show_dialog:
+            files = self.cut_manager.last_selection
+            if files:
+                action = show_file_operations_dialog(files)
+                self._handle_file_operation(action, files)
             return True
-        return False
+        
+        # 正常剪切操作
+        if self.cut_manager.has_cut_files:
+            self.status_bar.send_notification("已剪切", f"{self.cut_manager.count} 个文件待移动")
+        
+        return True
+    
+    def _handle_file_operation(self, action, files):
+        """处理文件智能操作"""
+        if not action or not files:
+            return
+        
+        if action == "copy":
+            # 复制路径
+            from AppKit import NSPasteboard, NSStringPboardType
+            pb = NSPasteboard.generalPasteboard()
+            pb.clearContents()
+            paths_text = "\n".join(files)
+            pb.setString_forType_(paths_text, NSStringPboardType)
+            count = len(files)
+            msg = f"已复制 {count} 个文件路径" if count > 1 else "已复制文件路径"
+            self.status_bar.send_notification("✅ 已复制路径", msg)
+        
+        elif action == "compress":
+            # 压缩为 ZIP
+            success, msg, output_path = compress_to_zip(files)
+            if success:
+                self.status_bar.send_notification("✅ 压缩成功", msg)
+            else:
+                self.status_bar.send_notification("❌ 压缩失败", msg)
+        
+        elif action == "decompress":
+            # 解压压缩文件
+            for archive_path in files:
+                success, msg, output_dir = decompress_archive(archive_path)
+                if success:
+                    self.status_bar.send_notification("✅ 解压成功", msg)
+                else:
+                    self.status_bar.send_notification("❌ 解压失败", msg)
     
     def on_paste(self):
         """Cmd+V 回调"""
