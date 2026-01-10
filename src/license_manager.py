@@ -69,7 +69,7 @@ class LicenseManager:
             str: 激活码（2位）
         """
         # 年份（用于生成激活码）
-        year = create_name(date_only=True)
+        year = create_name("date_only")
         
         # 组合字符串：年份 + 机器码
         combined = year + self.machine_code
