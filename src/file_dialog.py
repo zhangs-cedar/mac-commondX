@@ -73,9 +73,13 @@ def show_file_operations_dialog(files):
     print("[7.2] [FileDialog] show_file_operations_dialog() 开始创建弹窗")
     print(f"[7.2] [FileDialog] 文件列表: {len(files)} 个文件")
     
-    # 激活应用，确保弹窗能显示在最前面
-    NSApp.setActivationPolicy_(0)
-    NSApp.activateIgnoringOtherApps_(True)
+    # 【关键修复】不激活应用，避免影响 Event Tap
+    # 只临时改变激活策略，不强制激活应用
+    # 这样弹窗仍然可以显示，但不会让应用成为活动窗口，Finder 保持为活动窗口
+    original_policy = NSApp.activationPolicy()
+    if original_policy == 2:  # NSApplicationActivationPolicyAccessory
+        NSApp.setActivationPolicy_(0)  # NSApplicationActivationPolicyRegular
+    # 不调用 activateIgnoringOtherApps，保持 Finder 为活动窗口
     
     alert = NSAlert.alloc().init()
     alert.setMessageText_("文件智能操作")
@@ -162,7 +166,31 @@ def show_file_operations_dialog(files):
     print(f"[7.2.2] [FileDialog] runModal() 返回 - result={result}（用户已选择）")
     
     # 恢复应用策略
-    NSApp.setActivationPolicy_(2)
+    NSApp.setActivationPolicy_(original_policy)
+    
+    # 【关键修复】由于没有激活应用，Finder 应该仍然是活动窗口
+    # 验证一下确保 Finder 是活动窗口
+    from AppKit import NSWorkspace
+    app = NSWorkspace.sharedWorkspace().frontmostApplication()
+    is_finder = app and app.bundleIdentifier() == "com.apple.finder"
+    if not is_finder:
+        print(f"[7.2.2] [FileDialog] 警告：Finder 不是活动窗口，当前应用: {app.bundleIdentifier() if app else None}")
+        # 如果 Finder 不是活动窗口，尝试恢复（虽然理论上不应该发生）
+        import subprocess
+        try:
+            subprocess.run(['osascript', '-e', 'tell application "Finder" to activate'], 
+                          timeout=2, capture_output=True)
+            print("[7.2.2] [FileDialog] ✓ Finder 已恢复为活动窗口")
+        except Exception as e:
+            print(f"[7.2.2] [FileDialog] ✗ 恢复 Finder 失败: {e}")
+    else:
+        print("[7.2.2] [FileDialog] ✓ Finder 仍然是活动窗口（未激活应用）")
+    
+    # 【关键修复】弹窗关闭后，确保 Event Tap 仍然启用
+    # macOS 在显示模态对话框时可能会自动禁用 Event Tap
+    # 需要在弹窗关闭后重新启用
+    print("[7.2.2] [FileDialog] 确保 Event Tap 已启用...")
+    # 注意：这里无法直接访问 event_tap 实例，需要在 app.py 中处理
     
     # 【步骤 7.2.3】根据返回值判断用户选择的操作
     if result == 1000:

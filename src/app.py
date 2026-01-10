@@ -13,6 +13,19 @@ CommondX 应用主逻辑
 7. 处理用户选择的操作（复制路径/压缩/解压）
 """
 
+import objc
+from Foundation import NSObject, NSTimer
+from AppKit import NSApp
+from cedar.utils import print
+
+from .event_tap import EventTap
+from .cut_manager import CutManager
+from .status_bar import StatusBarIcon
+from .license_manager import license_manager
+from .permission import check_accessibility, request_accessibility, open_accessibility_settings
+from .file_dialog import show_file_operations_dialog
+from .archive_manager import compress_to_zip, decompress_archive
+
 
 class CommondXApp(NSObject):
     """CommondX 应用代理"""
@@ -101,6 +114,44 @@ class CommondXApp(NSObject):
         print("[5] [App] 许可证无效，显示激活提示")
         self.status_bar.show_activation_required()
     
+    def _restoreEventTap_(self, timer):
+        """
+        延迟恢复 Event Tap（由定时器调用）
+        
+        在弹窗关闭后延迟调用，确保系统完全退出模态状态后再恢复 Event Tap。
+        会尝试多次，直到成功或达到最大尝试次数。
+        """
+        if not hasattr(self, '_restore_event_tap_attempts'):
+            self._restore_event_tap_attempts = 0
+        if not hasattr(self, '_restore_event_tap_max_attempts'):
+            self._restore_event_tap_max_attempts = 3
+        
+        self._restore_event_tap_attempts += 1
+        attempt = self._restore_event_tap_attempts
+        max_attempts = self._restore_event_tap_max_attempts
+        
+        print(f"[7.4] [App] 延迟恢复 Event Tap（尝试 {attempt}/{max_attempts}）...")
+        
+        if self.event_tap:
+            if self.event_tap.ensure_enabled():
+                print(f"[7.4] [App] ✓ Event Tap 已确保启用（尝试 {attempt}）")
+                self._restore_event_tap_attempts = 0  # 成功后重置计数器
+                return
+            else:
+                print(f"[7.4] [App] ✗ Event Tap 确保启用失败（尝试 {attempt}），尝试重新启动...")
+                if self.event_tap.running:
+                    self.event_tap.stop()
+                if self.event_tap.start():
+                    print(f"[7.4] [App] ✓ Event Tap 已重新启动（尝试 {attempt}）")
+                    self._restore_event_tap_attempts = 0  # 成功后重置计数器
+                    return
+                else:
+                    print(f"[7.4] [App] ✗ Event Tap 重新启动失败（尝试 {attempt}）")
+        
+        # 如果达到最大尝试次数，记录警告
+        if attempt >= max_attempts:
+            print(f"[7.4] [App] ⚠️ Event Tap 恢复失败，已达到最大尝试次数 {max_attempts}")
+    
     def on_cut(self):
         """
         Cmd+X 回调函数
@@ -149,20 +200,69 @@ class CommondXApp(NSObject):
             print(f"[7.2] [App] 弹窗返回 - action={action}")
             self._current_alert = alert
             
+            # 【关键修复】弹窗关闭后，确保 Event Tap 仍然启用
+            # macOS 在显示模态对话框时可能会自动禁用 Event Tap
+            # 需要在弹窗关闭后重新启用
+            print("[7.2] [App] 弹窗关闭后，确保 Event Tap 已启用...")
+            if self.event_tap:
+                if self.event_tap.ensure_enabled():
+                    print("[7.2] [App] ✓ Event Tap 已重新启用")
+                else:
+                    print("[7.2] [App] ✗ Event Tap 重新启用失败")
+            
             # 【步骤 7.3】处理用户选择的操作
             print(f"[7.3] [App] 处理用户操作: {action}")
-            self._handle_file_operation(action, files)
             
-            # 【步骤 7.4】操作完成后，重置 last_selection
-            print(f"[7.4] [App] 重置 last_selection（操作完成）")
-            self.cut_manager.last_selection = None
+            if action:
+                # 用户执行了操作（复制/压缩/解压），处理操作
+                self._handle_file_operation(action, files)
+                # 【步骤 7.4】操作完成后，重置 last_selection（允许下次重新开始）
+                print(f"[7.4] [App] 操作完成，重置 last_selection")
+                self.cut_manager.last_selection = None
+            else:
+                # 用户选择"取消"，保持 last_selection 不变（允许下次继续显示弹窗）
+                print(f"[7.4] [App] 用户取消，保持 last_selection 不变: {self.cut_manager.last_selection}")
+            
             self._current_alert = None
-            print("[7.4] [App] 重置完成")
+            
+            # 【关键修复】弹窗关闭后，确保 Event Tap 仍然启用
+            # macOS 在显示模态对话框时可能会自动禁用 Event Tap
+            # 需要在弹窗关闭后重新启用，如果失败则重新创建
+            # 使用多次延迟恢复，确保系统完全退出模态状态
+            print("[7.4] [App] 弹窗关闭后，确保 Event Tap 已启用...")
+            self._restore_event_tap_attempts = 0
+            self._restore_event_tap_max_attempts = 3
+            
+            # 立即尝试一次
+            self._restoreEventTap_(None)
+            
+            # 延迟 50ms、100ms、200ms 再尝试，确保系统完全退出模态状态
+            for delay in [0.05, 0.1, 0.2]:
+                NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+                    delay, self, "_restoreEventTap:", None, False
+                )
+            
+            print("[7.4] [App] 弹窗处理完成")
             
             return True
         
         # 【步骤 8】正常剪切操作（选择与上次不同）
         print("[8] [App] 执行正常剪切操作（选择与上次不同）")
+        # #region agent log
+        import json, time
+        try:
+            with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({
+                    "sessionId": "debug-session",
+                    "runId": "run2",
+                    "hypothesisId": "F",
+                    "location": "app.py:on_cut",
+                    "message": "执行正常剪切操作",
+                    "data": {"has_cut_files": self.cut_manager.has_cut_files, "count": self.cut_manager.count, "timestamp": time.time()},
+                    "timestamp": int(time.time() * 1000)
+                }) + '\n')
+        except: pass
+        # #endregion
         if self.cut_manager.has_cut_files:
             count = self.cut_manager.count
             print(f"[8] [App] 已剪切 {count} 个文件")

@@ -80,6 +80,31 @@ class EventTap:
         这是 Event Tap 的核心回调函数。每当系统有键盘事件时，都会先调用这个函数。
         我们可以在这里拦截事件，决定是"吞掉"（返回 None）还是"放行"（返回 event）。
         """
+        # #region agent log - 在函数最开始就记录，确保即使出错也能看到
+        import json, time
+        try:
+            with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({
+                    "sessionId": "debug-session",
+                    "runId": "run2",
+                    "hypothesisId": "D",
+                    "location": "event_tap.py:_callback",
+                    "message": "Event Tap 回调被调用（函数入口）",
+                    "data": {"event_type": event_type, "timestamp": time.time()},
+                    "timestamp": int(time.time() * 1000)
+                }) + '\n')
+        except Exception as e:
+            print(f"[DEBUG LOG ERROR] {e}")
+        # #endregion
+        
+        # 【关键修复】每次回调时都确保 Event Tap 已启用
+        # 这样可以自动恢复被系统禁用的 Event Tap
+        if self.running and self.tap:
+            try:
+                CGEventTapEnable(self.tap, True)
+            except:
+                pass  # 如果失败，继续执行，至少记录了这个事件
+        
         try:
             # 【步骤 1】捕获键盘事件
             print(f"[1] [EventTap] 捕获键盘事件 - event_type={event_type}")
@@ -111,7 +136,23 @@ class EventTap:
             print(f"[2] [EventTap] ✓ 确认为 Cmd+X 或 Cmd+V")
             
             # 【步骤 3】检查是否为 Finder 窗口
-            if not self._is_finder_active():
+            is_finder = self._is_finder_active()
+            # #region agent log
+            import json, time
+            try:
+                with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
+                    f.write(json.dumps({
+                        "sessionId": "debug-session",
+                        "runId": "run2",
+                        "hypothesisId": "B",
+                        "location": "event_tap.py:_callback",
+                        "message": "Finder 检查结果",
+                        "data": {"is_finder": is_finder, "keycode": keycode, "timestamp": time.time()},
+                        "timestamp": int(time.time() * 1000)
+                    }) + '\n')
+            except: pass
+            # #endregion
+            if not is_finder:
                 print(f"[3] [EventTap] 不是 Finder 窗口，放行事件")
                 return event
             
@@ -179,6 +220,67 @@ class EventTap:
         
         self.running = True
         print("[EventTap] ✓ Event Tap 已启动，开始监听键盘事件")
+        return True
+    
+    def ensure_enabled(self):
+        """
+        确保 Event Tap 已启用
+        
+        【问题说明】
+        macOS 在显示模态对话框时可能会自动禁用 Event Tap。
+        这个方法检查 Event Tap 是否仍然启用，如果没有则重新启用。
+        如果重新启用失败，则完全重新创建 Event Tap。
+        """
+        if not self.running:
+            print("[EventTap] Event Tap 未运行，无法确保启用")
+            return False
+        
+        # 如果 tap 对象不存在，需要重新创建
+        if not self.tap:
+            print("[EventTap] Event Tap 对象不存在，重新创建...")
+            return self._recreate_tap()
+        
+        # 尝试重新启用 Event Tap
+        try:
+            CGEventTapEnable(self.tap, True)
+            print("[EventTap] ✓ Event Tap 已重新启用")
+            return True
+        except Exception as e:
+            print(f"[EventTap] 重新启用 Event Tap 失败: {e}，尝试重新创建...")
+            return self._recreate_tap()
+    
+    def _recreate_tap(self):
+        """
+        重新创建 Event Tap
+        
+        当 Event Tap 被系统禁用且无法恢复时，完全重新创建它。
+        """
+        print("[EventTap] 开始重新创建 Event Tap...")
+        
+        # 先停止旧的（如果存在）
+        if self.tap:
+            try:
+                CGEventTapEnable(self.tap, False)
+            except:
+                pass
+            self.tap = None
+        
+        # 重新创建
+        self.tap = CGEventTapCreate(
+            kCGSessionEventTap, kCGHeadInsertEventTap, kCGEventTapOptionDefault,
+            CGEventMaskBit(kCGEventKeyDown), self._callback, None
+        )
+        if not self.tap:
+            print("[ERROR] [EventTap] 无法重新创建 Event Tap，检查辅助功能权限")
+            self.running = False
+            return False
+        
+        # 重新添加到运行循环
+        source = CFMachPortCreateRunLoopSource(None, self.tap, 0)
+        CFRunLoopAddSource(CFRunLoopGetCurrent(), source, Quartz.kCFRunLoopCommonModes)
+        CGEventTapEnable(self.tap, True)
+        
+        print("[EventTap] ✓ Event Tap 已重新创建并启用")
         return True
     
     def stop(self):

@@ -193,6 +193,21 @@ class CutManager:
         print("[6.7] [CutManager] 选择不同，执行剪切操作")
         self.cut_files = valid
         print(f"[6.7] [CutManager] 更新 cut_files: {len(valid)} 个文件")
+        # #region agent log
+        import json, time
+        try:
+            with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({
+                    "sessionId": "debug-session",
+                    "runId": "run2",
+                    "hypothesisId": "F",
+                    "location": "cut_manager.py:cut",
+                    "message": "执行剪切操作，更新 cut_files",
+                    "data": {"cut_files_count": len(valid), "cut_files": valid, "timestamp": time.time()},
+                    "timestamp": int(time.time() * 1000)
+                }) + '\n')
+        except: pass
+        # #endregion
         self._notify()
         print("[6.7] [CutManager] 返回 (True, False)")
         return True, False
