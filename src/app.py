@@ -249,21 +249,8 @@ class CommondXApp(NSObject):
         
         # 【步骤 8】正常剪切操作（选择与上次不同）
         print("[8] [App] 执行正常剪切操作（选择与上次不同）")
-        # #region agent log
-        import json, time
-        try:
-            with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({
-                    "sessionId": "debug-session",
-                    "runId": "run2",
-                    "hypothesisId": "F",
-                    "location": "app.py:on_cut",
-                    "message": "执行正常剪切操作",
-                    "data": {"has_cut_files": self.cut_manager.has_cut_files, "count": self.cut_manager.count, "timestamp": time.time()},
-                    "timestamp": int(time.time() * 1000)
-                }) + '\n')
-        except: pass
-        # #endregion
+        import time
+        print(f"[DEBUG] [App] 调试日志 - sessionId=debug-session, runId=run2, hypothesisId=F, location=app.py:on_cut, message=执行正常剪切操作, data={{has_cut_files={self.cut_manager.has_cut_files}, count={self.cut_manager.count}, timestamp={time.time()}}}, timestamp={int(time.time() * 1000)}")
         if self.cut_manager.has_cut_files:
             count = self.cut_manager.count
             print(f"[8] [App] 已剪切 {count} 个文件")

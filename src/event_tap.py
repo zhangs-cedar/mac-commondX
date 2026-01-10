@@ -14,6 +14,7 @@ Event Tap 是 macOS 提供的系统级事件拦截机制，可以捕获所有键
 只有当 Finder 是当前活动应用时，我们才处理 Cmd+X 事件。
 """
 
+import time
 import Quartz
 from Quartz import (
     CGEventTapCreate, CGEventTapEnable, CFMachPortCreateRunLoopSource,
@@ -80,22 +81,8 @@ class EventTap:
         这是 Event Tap 的核心回调函数。每当系统有键盘事件时，都会先调用这个函数。
         我们可以在这里拦截事件，决定是"吞掉"（返回 None）还是"放行"（返回 event）。
         """
-        # #region agent log - 在函数最开始就记录，确保即使出错也能看到
-        import json, time
-        try:
-            with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({
-                    "sessionId": "debug-session",
-                    "runId": "run2",
-                    "hypothesisId": "D",
-                    "location": "event_tap.py:_callback",
-                    "message": "Event Tap 回调被调用（函数入口）",
-                    "data": {"event_type": event_type, "timestamp": time.time()},
-                    "timestamp": int(time.time() * 1000)
-                }) + '\n')
-        except Exception as e:
-            print(f"[DEBUG LOG ERROR] {e}")
-        # #endregion
+        # 在函数最开始就记录，确保即使出错也能看到
+        print(f"[DEBUG] [EventTap] 调试日志 - sessionId=debug-session, runId=run2, hypothesisId=D, location=event_tap.py:_callback, message=Event Tap 回调被调用（函数入口）, data={{event_type={event_type}, timestamp={time.time()}}}, timestamp={int(time.time() * 1000)}")
         
         # 【关键修复】每次回调时都确保 Event Tap 已启用
         # 这样可以自动恢复被系统禁用的 Event Tap
@@ -137,21 +124,7 @@ class EventTap:
             
             # 【步骤 3】检查是否为 Finder 窗口
             is_finder = self._is_finder_active()
-            # #region agent log
-            import json, time
-            try:
-                with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
-                    f.write(json.dumps({
-                        "sessionId": "debug-session",
-                        "runId": "run2",
-                        "hypothesisId": "B",
-                        "location": "event_tap.py:_callback",
-                        "message": "Finder 检查结果",
-                        "data": {"is_finder": is_finder, "keycode": keycode, "timestamp": time.time()},
-                        "timestamp": int(time.time() * 1000)
-                    }) + '\n')
-            except: pass
-            # #endregion
+            print(f"[DEBUG] [EventTap] 调试日志 - sessionId=debug-session, runId=run2, hypothesisId=B, location=event_tap.py:_callback, message=Finder 检查结果, data={{is_finder={is_finder}, keycode={keycode}, timestamp={time.time()}}}, timestamp={int(time.time() * 1000)}")
             if not is_finder:
                 print(f"[3] [EventTap] 不是 Finder 窗口，放行事件")
                 return event
