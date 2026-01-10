@@ -174,6 +174,13 @@ class StatusBarIcon(NSObject):
         
         # 文件智能操作子菜单
         self.smart_ops_menu = NSMenu.alloc().init()
+        
+        # 添加说明项（禁用状态，仅用于提示）
+        # 当用户重复 Cmd+X 选择相同文件时，会自动显示此菜单
+        _add_menu_item(self.smart_ops_menu, self, "💡 重复 Cmd+X 时自动显示", enabled=False)
+        self.smart_ops_menu.addItem_(NSMenuItem.separatorItem())
+        
+        # 操作选项
         _add_menu_item(self.smart_ops_menu, self, "压缩文件", "smartCompress:")
         _add_menu_item(self.smart_ops_menu, self, "解压缩文件", "smartDecompress:")
         _add_menu_item(self.smart_ops_menu, self, "MD 转 HTML", "smartMdToHtml:")
@@ -181,6 +188,7 @@ class StatusBarIcon(NSObject):
         _add_menu_item(self.smart_ops_menu, self, "复制文件路径", "smartCopyPaths:")
         # _add_menu_item(self.smart_ops_menu, self, "自定义脚本", "smartCustomScript:")
         
+        # 主菜单项：使用简洁的标题
         smart_ops_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("文件智能操作", None, "")
         smart_ops_item.setSubmenu_(self.smart_ops_menu)
         menu.addItem_(smart_ops_item)
