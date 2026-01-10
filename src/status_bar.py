@@ -173,16 +173,16 @@ class StatusBarIcon(NSObject):
         _add_menu_item(menu, self, "清空列表", "clearCut:")
         
         # 文件智能操作子菜单
-        smart_ops_menu = NSMenu.alloc().init()
-        _add_menu_item(smart_ops_menu, self, "压缩文件", "smartCompress:")
-        _add_menu_item(smart_ops_menu, self, "解压缩文件", "smartDecompress:")
-        _add_menu_item(smart_ops_menu, self, "MD 转 HTML", "smartMdToHtml:")
-        _add_menu_item(smart_ops_menu, self, "MD 转 PDF", "smartMdToPdf:")
-        _add_menu_item(smart_ops_menu, self, "复制文件路径", "smartCopyPaths:")
-        # _add_menu_item(smart_ops_menu, self, "自定义脚本", "smartCustomScript:")
+        self.smart_ops_menu = NSMenu.alloc().init()
+        _add_menu_item(self.smart_ops_menu, self, "压缩文件", "smartCompress:")
+        _add_menu_item(self.smart_ops_menu, self, "解压缩文件", "smartDecompress:")
+        _add_menu_item(self.smart_ops_menu, self, "MD 转 HTML", "smartMdToHtml:")
+        _add_menu_item(self.smart_ops_menu, self, "MD 转 PDF", "smartMdToPdf:")
+        _add_menu_item(self.smart_ops_menu, self, "复制文件路径", "smartCopyPaths:")
+        # _add_menu_item(self.smart_ops_menu, self, "自定义脚本", "smartCustomScript:")
         
         smart_ops_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("文件智能操作", None, "")
-        smart_ops_item.setSubmenu_(smart_ops_menu)
+        smart_ops_item.setSubmenu_(self.smart_ops_menu)
         menu.addItem_(smart_ops_item)
         
         menu.addItem_(NSMenuItem.separatorItem())
@@ -293,6 +293,51 @@ class StatusBarIcon(NSObject):
         
         return files
     
+    def show_smart_operations_menu(self, files):
+        """
+        显示文件智能操作菜单
+        
+        在状态栏图标位置显示菜单，支持键盘上下键导航。
+        
+        Args:
+            files: 文件路径列表
+        """
+        print("[DEBUG] [StatusBar] 显示文件智能操作菜单")
+        if not files:
+            print("[DEBUG] [StatusBar] 文件列表为空，不显示菜单")
+            return
+        
+        # 更新缓存的文件列表
+        self.cached_files = files
+        print(f"[DEBUG] [StatusBar] 缓存文件列表: {len(files)} 个文件")
+        
+        # 获取状态栏按钮
+        button = self.status_item.button()
+        if button:
+            # 临时替换菜单为智能操作菜单
+            original_menu = self.status_item.menu()
+            self.status_item.setMenu_(self.smart_ops_menu)
+            
+            # 获取按钮位置并显示菜单
+            frame = button.frame()
+            point = NSPoint(frame.origin.x, frame.origin.y - frame.size.height)
+            # 使用 popUpMenuPositioningItem 显示菜单，支持键盘导航
+            self.smart_ops_menu.popUpMenuPositioningItem_atLocation_inView_(
+                None, point, button
+            )
+            
+            # 恢复原菜单
+            self.status_item.setMenu_(original_menu)
+            print("[DEBUG] [StatusBar] ✓ 菜单已显示，支持键盘导航（上下键选择，回车确认，ESC 取消）")
+        else:
+            print("[ERROR] [StatusBar] 无法获取状态栏按钮，菜单显示失败")
+    
+    def _reset_last_selection(self):
+        """重置 last_selection（允许下次重新开始）"""
+        if self.cut_manager:
+            print("[DEBUG] [StatusBar] 重置 last_selection")
+            self.cut_manager.last_selection = None
+    
     @objc.IBAction
     def smartCompress_(self, sender):
         """压缩文件"""
@@ -308,6 +353,9 @@ class StatusBarIcon(NSObject):
         else:
             self.send_notification("❌ 压缩失败", msg)
             print(f"[DEBUG] [StatusBar] ✗ 压缩失败: {msg}")
+        
+        # 操作完成后，重置 last_selection（允许下次重新开始）
+        self._reset_last_selection()
     
     @objc.IBAction
     def smartDecompress_(self, sender):
@@ -325,6 +373,9 @@ class StatusBarIcon(NSObject):
             else:
                 self.send_notification("❌ 解压失败", msg)
                 print(f"[DEBUG] [StatusBar] ✗ 解压失败: {msg}")
+        
+        # 操作完成后，重置 last_selection（允许下次重新开始）
+        self._reset_last_selection()
     
     @objc.IBAction
     def smartMdToHtml_(self, sender):
@@ -347,6 +398,9 @@ class StatusBarIcon(NSObject):
             else:
                 self.send_notification("❌ 转换失败", msg)
                 print(f"[DEBUG] [StatusBar] ✗ MD 转 HTML 失败: {msg}")
+        
+        # 操作完成后，重置 last_selection（允许下次重新开始）
+        self._reset_last_selection()
     
     @objc.IBAction
     def smartMdToPdf_(self, sender):
@@ -369,6 +423,9 @@ class StatusBarIcon(NSObject):
             else:
                 self.send_notification("❌ 转换失败", msg)
                 print(f"[DEBUG] [StatusBar] ✗ MD 转 PDF 失败: {msg}")
+        
+        # 操作完成后，重置 last_selection（允许下次重新开始）
+        self._reset_last_selection()
     
     @objc.IBAction
     def smartCopyPaths_(self, sender):
@@ -384,6 +441,9 @@ class StatusBarIcon(NSObject):
         msg = f"已复制 {count} 个文件路径" if count > 1 else "已复制文件路径"
         self.send_notification("✅ 已复制路径", msg)
         print(f"[DEBUG] [StatusBar] ✓ 复制路径完成: {count} 个文件")
+        
+        # 操作完成后，重置 last_selection（允许下次重新开始）
+        self._reset_last_selection()
     
     @objc.IBAction
     def checkPermission_(self, sender):

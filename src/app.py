@@ -23,7 +23,6 @@ from .cut_manager import CutManager
 from .status_bar import StatusBarIcon
 from .license_manager import license_manager
 from .permission import check_accessibility, request_accessibility, open_accessibility_settings
-from .file_dialog import show_file_operations_dialog
 from .archive_manager import compress_to_zip, decompress_archive
 from .utils import copy_to_clipboard
 
@@ -178,72 +177,27 @@ class CommondXApp(NSObject):
             print("[6] [App] cut() 失败（无文件或文件无效），返回 False")
             return False
         
-        # 【步骤 7】如果应该显示智能操作弹窗（选择与上次相同）
+        # 【步骤 7】如果应该显示智能操作菜单（选择与上次相同）
         if should_show_dialog:
-            print("[7] [App] 需要显示智能操作弹窗（选择与上次相同）")
+            print("[7] [App] 需要显示智能操作菜单（选择与上次相同）")
             files = self.cut_manager.last_selection
             print(f"[7] [App] 文件列表: {files}")
             
             if not files:
-                print("[7] [App] 文件列表为空，跳过弹窗")
+                print("[7] [App] 文件列表为空，跳过菜单显示")
                 return True
             
-            # 【步骤 7.1】如果已有弹窗，先关闭它
-            if self._current_alert:
-                print("[7.1] [App] 检测到已有弹窗，先关闭它")
-                NSApp.stopModal()
-                self._current_alert = None
-                print("[7.1] [App] 已关闭旧弹窗")
-            
-            # 【步骤 7.2】显示新弹窗
-            print("[7.2] [App] 准备显示智能操作弹窗...")
-            action, alert = show_file_operations_dialog(files)
-            print(f"[7.2] [App] 弹窗返回 - action={action}")
-            self._current_alert = alert
-            
-            # 【关键修复】弹窗关闭后，确保 Event Tap 仍然启用
-            # macOS 在显示模态对话框时可能会自动禁用 Event Tap
-            # 需要在弹窗关闭后重新启用
-            print("[7.2] [App] 弹窗关闭后，确保 Event Tap 已启用...")
-            if self.event_tap:
-                if self.event_tap.ensure_enabled():
-                    print("[7.2] [App] ✓ Event Tap 已重新启用")
-                else:
-                    print("[7.2] [App] ✗ Event Tap 重新启用失败")
-            
-            # 【步骤 7.3】处理用户选择的操作
-            print(f"[7.3] [App] 处理用户操作: {action}")
-            
-            if action:
-                # 用户执行了操作（复制/压缩/解压），处理操作
-                self._handle_file_operation(action, files)
-                # 【步骤 7.4】操作完成后，重置 last_selection（允许下次重新开始）
-                print(f"[7.4] [App] 操作完成，重置 last_selection")
-                self.cut_manager.last_selection = None
+            # 【步骤 7.1】显示状态栏菜单（支持键盘上下键导航）
+            print("[7.1] [App] 显示文件智能操作菜单...")
+            if self.status_bar:
+                self.status_bar.show_smart_operations_menu(files)
+                print("[7.1] [App] ✓ 菜单已显示，用户可以使用键盘上下键选择操作")
             else:
-                # 用户选择"取消"，保持 last_selection 不变（允许下次继续显示弹窗）
-                print(f"[7.4] [App] 用户取消，保持 last_selection 不变: {self.cut_manager.last_selection}")
+                print("[7.1] [App] ✗ 状态栏未初始化，无法显示菜单")
             
-            self._current_alert = None
-            
-            # 【关键修复】弹窗关闭后，确保 Event Tap 仍然启用
-            # macOS 在显示模态对话框时可能会自动禁用 Event Tap
-            # 需要在弹窗关闭后重新启用，如果失败则重新创建
-            # 使用多次延迟恢复，确保系统完全退出模态状态
-            print("[7.4] [App] 弹窗关闭后，确保 Event Tap 已启用...")
-            self._restore_event_tap_attempts = 0
-            self._restore_event_tap_max_attempts = 3
-            
-            # 立即尝试一次
-            self._restoreEventTap_(None)
-            
-            # 延迟 50ms、100ms、200ms 再尝试，确保系统完全退出模态状态
-            for delay in [0.05, 0.1, 0.2]:
-                NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
-                    delay, self, "_restoreEventTap:", None, False
-                )
-            
-            print("[7.4] [App] 弹窗处理完成")
+            # 注意：菜单选择后会自动调用对应的处理方法（smartCompress_、smartDecompress_ 等）
+            # 这些方法会处理操作并重置 last_selection
+            # 如果用户没有选择任何操作（按 ESC 或点击外部），保持 last_selection 不变
             
             return True
         
