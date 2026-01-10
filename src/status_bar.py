@@ -2,6 +2,7 @@
 """状态栏图标"""
 
 import objc
+from pathlib import Path
 from Foundation import NSObject, NSTimer
 from AppKit import (
     NSStatusBar, NSMenu, NSMenuItem, NSImage, NSColor, NSApplication,
@@ -10,7 +11,6 @@ from AppKit import (
 )
 from cedar.utils import print
 
-from .file_dialog import show_file_operations_dialog
 from .archive_manager import compress_to_zip, decompress_archive
 from .utils import copy_to_clipboard
 
@@ -171,7 +171,19 @@ class StatusBarIcon(NSObject):
         # 功能区
         self.files_header = _add_menu_item(menu, self, "无待移动文件", enabled=False)
         _add_menu_item(menu, self, "清空列表", "clearCut:")
-        _add_menu_item(menu, self, "文件智能操作", "smartFileOperations:")
+        
+        # 文件智能操作子菜单
+        smart_ops_menu = NSMenu.alloc().init()
+        _add_menu_item(smart_ops_menu, self, "压缩文件", "smartCompress:")
+        _add_menu_item(smart_ops_menu, self, "解压缩文件", "smartDecompress:")
+        _add_menu_item(smart_ops_menu, self, "MD 转 HTML", "smartMdToHtml:")
+        _add_menu_item(smart_ops_menu, self, "MD 转 PDF", "smartMdToPdf:")
+        _add_menu_item(smart_ops_menu, self, "复制文件路径", "smartCopyPaths:")
+        # _add_menu_item(smart_ops_menu, self, "自定义脚本", "smartCustomScript:")
+        
+        smart_ops_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("文件智能操作", None, "")
+        smart_ops_item.setSubmenu_(smart_ops_menu)
+        menu.addItem_(smart_ops_item)
         
         menu.addItem_(NSMenuItem.separatorItem())
         
@@ -257,50 +269,121 @@ class StatusBarIcon(NSObject):
         self.cut_manager.clear()
         self.send_notification("🗑️ 已清空", "剪切列表已清空")
     
-    @objc.IBAction
-    def smartFileOperations_(self, sender):
-        """文件智能操作"""
-        # 尝试获取当前选中的文件
+    def _get_selected_files(self):
+        """
+        获取选中的文件列表
+        
+        Returns:
+            list: 文件路径列表，如果获取失败返回 None
+        """
+        print("[DEBUG] [StatusBar] 获取选中的文件...")
         files = self.cut_manager.get_finder_selection()
         
-        # 如果获取失败或为空，使用缓存的列表
         if not files:
             if self.cached_files:
                 files = self.cached_files
+                print(f"[DEBUG] [StatusBar] 使用缓存的文件列表: {len(files)} 个文件")
             else:
+                print("[DEBUG] [StatusBar] 未选中文件且无缓存")
                 self.send_notification("⚠️ 未选中文件", "请在 Finder 中选中文件")
-                return
+                return None
         else:
-            # 获取成功，更新缓存
             self.cached_files = files
+            print(f"[DEBUG] [StatusBar] 获取到文件列表: {len(files)} 个文件")
         
-        # 显示文件操作弹窗
-        action = show_file_operations_dialog(files)
+        return files
+    
+    @objc.IBAction
+    def smartCompress_(self, sender):
+        """压缩文件"""
+        print("[DEBUG] [StatusBar] 执行压缩文件操作")
+        files = self._get_selected_files()
+        if not files:
+            return
         
-        if action == "copy":
-            # 复制路径
-            paths_text = "\n".join(files)
-            copy_to_clipboard(paths_text)
-            count = len(files)
-            msg = f"已复制 {count} 个文件路径" if count > 1 else "已复制文件路径"
-            self.send_notification("✅ 已复制路径", msg)
+        success, msg, output_path = compress_to_zip(files)
+        if success:
+            self.send_notification("✅ 压缩成功", msg)
+            print(f"[DEBUG] [StatusBar] ✓ 压缩成功: {msg}")
+        else:
+            self.send_notification("❌ 压缩失败", msg)
+            print(f"[DEBUG] [StatusBar] ✗ 压缩失败: {msg}")
+    
+    @objc.IBAction
+    def smartDecompress_(self, sender):
+        """解压缩文件"""
+        print("[DEBUG] [StatusBar] 执行解压缩文件操作")
+        files = self._get_selected_files()
+        if not files:
+            return
         
-        elif action == "compress":
-            # 压缩为 ZIP
-            success, msg, output_path = compress_to_zip(files)
+        for archive_path in files:
+            success, msg, output_dir = decompress_archive(archive_path)
             if success:
-                self.send_notification("✅ 压缩成功", msg)
+                self.send_notification("✅ 解压成功", msg)
+                print(f"[DEBUG] [StatusBar] ✓ 解压成功: {msg}")
             else:
-                self.send_notification("❌ 压缩失败", msg)
+                self.send_notification("❌ 解压失败", msg)
+                print(f"[DEBUG] [StatusBar] ✗ 解压失败: {msg}")
+    
+    @objc.IBAction
+    def smartMdToHtml_(self, sender):
+        """MD 转 HTML"""
+        print("[DEBUG] [StatusBar] 执行 MD 转 HTML 操作")
+        files = self._get_selected_files()
+        if not files:
+            return
         
-        elif action == "decompress":
-            # 解压压缩文件
-            for archive_path in files:
-                success, msg, output_dir = decompress_archive(archive_path)
-                if success:
-                    self.send_notification("✅ 解压成功", msg)
-                else:
-                    self.send_notification("❌ 解压失败", msg)
+        from .utils import convert_md_to_html
+        for md_path in files:
+            if not md_path.lower().endswith(('.md', '.markdown')):
+                self.send_notification("⚠️ 跳过", f"{Path(md_path).name} 不是 Markdown 文件")
+                continue
+            
+            success, msg, output_path = convert_md_to_html(md_path)
+            if success:
+                self.send_notification("✅ 转换成功", msg)
+                print(f"[DEBUG] [StatusBar] ✓ MD 转 HTML 成功: {msg}")
+            else:
+                self.send_notification("❌ 转换失败", msg)
+                print(f"[DEBUG] [StatusBar] ✗ MD 转 HTML 失败: {msg}")
+    
+    @objc.IBAction
+    def smartMdToPdf_(self, sender):
+        """MD 转 PDF"""
+        print("[DEBUG] [StatusBar] 执行 MD 转 PDF 操作")
+        files = self._get_selected_files()
+        if not files:
+            return
+        
+        from .utils import convert_md_to_pdf
+        for md_path in files:
+            if not md_path.lower().endswith(('.md', '.markdown')):
+                self.send_notification("⚠️ 跳过", f"{Path(md_path).name} 不是 Markdown 文件")
+                continue
+            
+            success, msg, output_path = convert_md_to_pdf(md_path)
+            if success:
+                self.send_notification("✅ 转换成功", msg)
+                print(f"[DEBUG] [StatusBar] ✓ MD 转 PDF 成功: {msg}")
+            else:
+                self.send_notification("❌ 转换失败", msg)
+                print(f"[DEBUG] [StatusBar] ✗ MD 转 PDF 失败: {msg}")
+    
+    @objc.IBAction
+    def smartCopyPaths_(self, sender):
+        """复制文件路径"""
+        print("[DEBUG] [StatusBar] 执行复制文件路径操作")
+        files = self._get_selected_files()
+        if not files:
+            return
+        
+        paths_text = "\n".join(files)
+        copy_to_clipboard(paths_text)
+        count = len(files)
+        msg = f"已复制 {count} 个文件路径" if count > 1 else "已复制文件路径"
+        self.send_notification("✅ 已复制路径", msg)
+        print(f"[DEBUG] [StatusBar] ✓ 复制路径完成: {count} 个文件")
     
     @objc.IBAction
     def checkPermission_(self, sender):

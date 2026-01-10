@@ -204,3 +204,157 @@ def detect_archive_type(archive_path: str) -> str:
     
     print(f"[DEBUG] [Utils] 无法识别压缩文件类型")
     return None
+
+
+def convert_md_to_html(md_path: str, output_path: str = None) -> tuple:
+    """
+    将 Markdown 文件转换为 HTML
+    
+    Args:
+        md_path: Markdown 文件路径
+        output_path: 输出 HTML 文件路径，如果为 None 则自动生成
+        
+    Returns:
+        tuple: (success: bool, message: str, output_path: str)
+    """
+    print(f"[DEBUG] [Utils] 开始转换 MD 到 HTML: {md_path}")
+    try:
+        md_path = Path(md_path)
+        if not md_path.exists():
+            return False, "Markdown 文件不存在", None
+        
+        # 如果没有指定输出路径，自动生成
+        if output_path is None:
+            output_path = md_path.parent / f"{md_path.stem}.html"
+        else:
+            output_path = Path(output_path)
+        
+        # 如果文件已存在，添加序号
+        counter = 1
+        original_path = output_path
+        while output_path.exists():
+            output_path = original_path.parent / f"{original_path.stem}_{counter}{original_path.suffix}"
+            counter += 1
+        
+        # 读取 Markdown 内容
+        md_content = md_path.read_text(encoding='utf-8')
+        print(f"[DEBUG] [Utils] 读取 Markdown 内容，长度={len(md_content)}")
+        
+        # 尝试使用 markdown 库
+        try:
+            import markdown
+            html_content = markdown.markdown(md_content, extensions=['extra', 'codehilite'])
+            print(f"[DEBUG] [Utils] 使用 markdown 库转换成功")
+        except ImportError:
+            # 如果没有 markdown 库，使用简单的转换
+            print(f"[DEBUG] [Utils] markdown 库未安装，使用简单转换")
+            html_content = f"<pre>{md_content}</pre>"
+        
+        # 添加 HTML 模板
+        full_html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{md_path.stem}</title>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; line-height: 1.6; }}
+        pre {{ background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto; }}
+        code {{ background: #f5f5f5; padding: 2px 5px; border-radius: 3px; }}
+    </style>
+</head>
+<body>
+{html_content}
+</body>
+</html>"""
+        
+        # 写入 HTML 文件
+        output_path.write_text(full_html, encoding='utf-8')
+        print(f"[DEBUG] [Utils] ✓ HTML 文件已生成: {output_path}")
+        return True, f"转换成功：{output_path.name}", str(output_path)
+    
+    except Exception as e:
+        print(f"[ERROR] [Utils] MD 转 HTML 失败: {e}")
+        return False, f"转换失败：{str(e)}", None
+
+
+def convert_md_to_pdf(md_path: str, output_path: str = None) -> tuple:
+    """
+    将 Markdown 文件转换为 PDF
+    
+    Args:
+        md_path: Markdown 文件路径
+        output_path: 输出 PDF 文件路径，如果为 None 则自动生成
+        
+    Returns:
+        tuple: (success: bool, message: str, output_path: str)
+    """
+    print(f"[DEBUG] [Utils] 开始转换 MD 到 PDF: {md_path}")
+    try:
+        md_path = Path(md_path)
+        if not md_path.exists():
+            return False, "Markdown 文件不存在", None
+        
+        # 如果没有指定输出路径，自动生成
+        if output_path is None:
+            output_path = md_path.parent / f"{md_path.stem}.pdf"
+        else:
+            output_path = Path(output_path)
+        
+        # 如果文件已存在，添加序号
+        counter = 1
+        original_path = output_path
+        while output_path.exists():
+            output_path = original_path.parent / f"{original_path.stem}_{counter}{original_path.suffix}"
+            counter += 1
+        
+        # 先转换为 HTML，再转换为 PDF
+        html_path = md_path.parent / f"{md_path.stem}_temp.html"
+        success, msg, html_path_str = convert_md_to_html(md_path, str(html_path))
+        
+        if not success:
+            return False, f"HTML 转换失败：{msg}", None
+        
+        print(f"[DEBUG] [Utils] HTML 转换成功，开始转换为 PDF...")
+        
+        # 尝试使用 weasyprint 或 pdfkit
+        try:
+            import weasyprint
+            weasyprint.HTML(filename=str(html_path)).write_pdf(str(output_path))
+            html_path.unlink()  # 删除临时 HTML 文件
+            print(f"[DEBUG] [Utils] ✓ 使用 weasyprint 转换 PDF 成功: {output_path}")
+            return True, f"转换成功：{output_path.name}", str(output_path)
+        except ImportError:
+            pass
+        
+        try:
+            import pdfkit
+            pdfkit.from_file(str(html_path), str(output_path))
+            html_path.unlink()  # 删除临时 HTML 文件
+            print(f"[DEBUG] [Utils] ✓ 使用 pdfkit 转换 PDF 成功: {output_path}")
+            return True, f"转换成功：{output_path.name}", str(output_path)
+        except ImportError:
+            pass
+        
+        # 如果都没有安装，尝试使用系统工具
+        try:
+            # macOS 可以使用 textutil 或 cupsfilter
+            result = subprocess.run(
+                ['cupsfilter', str(html_path), str(output_path)],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            html_path.unlink()  # 删除临时 HTML 文件
+            if result.returncode == 0:
+                print(f"[DEBUG] [Utils] ✓ 使用系统工具转换 PDF 成功: {output_path}")
+                return True, f"转换成功：{output_path.name}", str(output_path)
+        except Exception as e:
+            print(f"[DEBUG] [Utils] 系统工具转换失败: {e}")
+        
+        # 如果都失败了
+        html_path.unlink()  # 删除临时 HTML 文件
+        return False, "PDF 转换失败，请安装 weasyprint 或 pdfkit 库", None
+    
+    except Exception as e:
+        print(f"[ERROR] [Utils] MD 转 PDF 失败: {e}")
+        return False, f"转换失败：{str(e)}", None
