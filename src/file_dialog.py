@@ -1,5 +1,17 @@
 #!/usr/bin/env python3
-"""文件操作对话框"""
+"""
+文件操作对话框
+
+【模态对话框说明】
+模态对话框（Modal Dialog）是一种特殊的窗口，它会：
+1. 阻塞当前线程，直到用户关闭对话框
+2. runModal() 方法会一直等待，直到用户点击按钮
+3. 用户点击按钮后，runModal() 返回按钮的返回值
+4. 在 runModal() 返回之前，代码不会继续执行
+
+这就是为什么在 app.py 中，show_file_operations_dialog() 调用后，
+代码会"暂停"，直到用户选择操作。
+"""
 
 import os
 from pathlib import Path
@@ -39,7 +51,14 @@ def _format_paths_list(files):
 
 def show_file_operations_dialog(files):
     """
-    显示文件操作弹窗
+    显示文件智能操作弹窗
+    
+    【模态对话框工作原理】
+    1. 创建 NSAlert 对象
+    2. 添加按钮（复制路径、压缩/解压、取消）
+    3. 调用 runModal() - 这会阻塞代码执行，直到用户点击按钮
+    4. runModal() 返回按钮的返回值（1000=第一个按钮，1001=第二个按钮，等等）
+    5. 根据返回值判断用户选择的操作
     
     Args:
         files: 文件路径列表
@@ -47,24 +66,25 @@ def show_file_operations_dialog(files):
     Returns:
         tuple: (action: str, alert: NSAlert)
             - action: 操作类型 "copy"、"compress"、"decompress" 或 None（取消）
-            - alert: 弹窗引用
+            - alert: 弹窗引用（虽然弹窗已关闭，但保留引用以便统一处理）
     """
     from cedar.utils import print
     
-    print("[DEBUG] show_file_operations_dialog() 进入")
-    print(f"[DEBUG] show_file_operations_dialog() 文件列表: {files}")
+    print("[7.2] [FileDialog] show_file_operations_dialog() 开始创建弹窗")
+    print(f"[7.2] [FileDialog] 文件列表: {len(files)} 个文件")
     
+    # 激活应用，确保弹窗能显示在最前面
     NSApp.setActivationPolicy_(0)
     NSApp.activateIgnoringOtherApps_(True)
     
     alert = NSAlert.alloc().init()
     alert.setMessageText_("文件智能操作")
     
-    # 统计信息
+    # 统计文件类型
     total_count = len(files)
     archive_count = sum(1 for f in files if _is_archive_file(f))
     has_regular_files = any(not _is_archive_file(f) for f in files)
-    print(f"[DEBUG] show_file_operations_dialog() 统计: total={total_count}, archive={archive_count}, has_regular={has_regular_files}")
+    print(f"[7.2] [FileDialog] 文件统计 - 总数={total_count}, 压缩文件={archive_count}, 有普通文件={has_regular_files}")
     
     # 构建提示文本
     if total_count == 1:
@@ -105,11 +125,12 @@ def show_file_operations_dialog(files):
     
     alert.setAccessoryView_(scroll_view)
     
-    # 智能添加操作按钮
-    # 始终显示"复制路径"
+    # 【步骤 7.2.1】智能添加操作按钮
+    # 始终显示"复制路径"按钮（第一个按钮，返回值 1000）
     alert.addButtonWithTitle_("复制路径")
+    print("[7.2.1] [FileDialog] 添加按钮: 复制路径")
     
-    # 根据选中项显示压缩或解压按钮
+    # 根据文件类型智能显示第二个按钮
     has_action_button = False
     action_type = None
     if archive_count > 0 and archive_count == total_count:
@@ -117,37 +138,42 @@ def show_file_operations_dialog(files):
         alert.addButtonWithTitle_("智能解压")
         has_action_button = True
         action_type = "decompress"
-        print("[DEBUG] show_file_operations_dialog() 添加解压按钮")
+        print("[7.2.1] [FileDialog] 添加按钮: 智能解压（全部是压缩文件）")
     elif has_regular_files:
         # 有普通文件/文件夹，显示压缩按钮
         alert.addButtonWithTitle_("压缩为 ZIP")
         has_action_button = True
         action_type = "compress"
-        print("[DEBUG] show_file_operations_dialog() 添加压缩按钮")
+        print("[7.2.1] [FileDialog] 添加按钮: 压缩为 ZIP（有普通文件）")
     
-    # 取消按钮
+    # 取消按钮（最后一个按钮）
     alert.addButtonWithTitle_("取消")
-    print(f"[DEBUG] show_file_operations_dialog() 按钮配置: has_action_button={has_action_button}, action_type={action_type}")
+    print("[7.2.1] [FileDialog] 添加按钮: 取消")
+    print(f"[7.2.1] [FileDialog] 按钮配置完成 - has_action_button={has_action_button}, action_type={action_type}")
     
-    # 在调用 runModal() 之前返回 alert 引用，以便外部可以关闭它
-    # 注意：runModal() 是阻塞的，返回时弹窗已关闭
-    print("[DEBUG] show_file_operations_dialog() 准备显示弹窗 (runModal)")
+    # 【步骤 7.2.2】显示弹窗（runModal 是阻塞的）
+    # 【重要】runModal() 会阻塞代码执行，直到用户点击按钮
+    # 用户点击按钮后，runModal() 返回按钮的返回值：
+    # - 1000 = 第一个按钮（复制路径）
+    # - 1001 = 第二个按钮（压缩/解压，如果存在）或取消
+    # - 1002 = 第三个按钮（取消，如果有第二个按钮）
+    print("[7.2.2] [FileDialog] 调用 runModal() - 代码将在此处暂停，等待用户操作...")
     result = alert.runModal()
-    print(f"[DEBUG] show_file_operations_dialog() 弹窗返回: result={result}")
+    print(f"[7.2.2] [FileDialog] runModal() 返回 - result={result}（用户已选择）")
+    
+    # 恢复应用策略
     NSApp.setActivationPolicy_(2)
     
-    # 返回操作类型和弹窗引用（虽然弹窗已关闭，但保留引用以便统一处理）
-    # 按钮顺序：复制路径(1000), 压缩/解压(1001 如果存在), 取消(1001 或 1002)
+    # 【步骤 7.2.3】根据返回值判断用户选择的操作
     if result == 1000:
         action = "copy"
-        print("[DEBUG] show_file_operations_dialog() 用户选择: 复制路径")
+        print("[7.2.3] [FileDialog] 用户选择: 复制路径")
     elif result == 1001 and has_action_button:
         action = action_type
-        print(f"[DEBUG] show_file_operations_dialog() 用户选择: {action_type}")
+        print(f"[7.2.3] [FileDialog] 用户选择: {action_type}")
     else:
         action = None
-        print("[DEBUG] show_file_operations_dialog() 用户选择: 取消")
+        print("[7.2.3] [FileDialog] 用户选择: 取消")
     
-    print(f"[DEBUG] show_file_operations_dialog() 返回: action={action}, alert={alert}")
-    print("[DEBUG] show_file_operations_dialog() 退出")
+    print(f"[7.2] [FileDialog] 弹窗处理完成，返回 action={action}")
     return action, alert

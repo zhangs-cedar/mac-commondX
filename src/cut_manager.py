@@ -1,5 +1,21 @@
 #!/usr/bin/env python3
-"""剪切管理器"""
+"""
+剪切管理器
+
+【状态跟踪机制说明】
+这个类负责跟踪用户的选择状态，判断是否应该显示智能操作弹窗。
+
+核心逻辑：
+1. 记录上一次选择的文件列表（last_selection）
+2. 每次 cut() 时，比较当前选择和上一次选择
+3. 如果选择相同 → 返回 (True, True)，触发智能操作弹窗
+4. 如果选择不同 → 执行剪切，更新 cut_files，返回 (True, False)
+
+【选择比较机制】
+使用 set() 比较文件列表，忽略顺序。例如：
+- ["file1", "file2"] 和 ["file2", "file1"] 被视为相同
+- 空列表 [] 和 None 被视为相同（都是空选择）
+"""
 
 import subprocess
 from pathlib import Path
@@ -26,12 +42,20 @@ def _escape(path: str) -> str:
 
 
 class CutManager:
-    """剪切管理器"""
+    """
+    剪切管理器
+    
+    负责：
+    1. 获取 Finder 选中的文件
+    2. 跟踪选择状态（比较当前选择和上一次选择）
+    3. 执行剪切操作（更新 cut_files）
+    4. 执行粘贴操作（移动文件）
+    """
     
     def __init__(self, on_state_change=None):
-        self.cut_files = []
-        self.on_state_change = on_state_change
-        self.last_selection = None  # 上一次选择的文件列表
+        self.cut_files = []  # 已剪切的文件列表（用于粘贴）
+        self.on_state_change = on_state_change  # 状态变化回调
+        self.last_selection = None  # 上一次选择的文件列表（用于判断是否显示弹窗）
     
     @property
     def has_cut_files(self) -> bool:
@@ -42,7 +66,13 @@ class CutManager:
         return len(self.cut_files)
     
     def get_finder_selection(self) -> list:
-        """获取 Finder 选中的文件"""
+        """
+        获取 Finder 当前选中的文件列表
+        
+        使用 AppleScript 与 Finder 通信，获取用户选中的文件路径。
+        如果没有选中文件，返回空列表 []。
+        """
+        print("[6.1] [CutManager] 获取 Finder 选中文件...")
         script = '''
         tell application "Finder"
             set selectedItems to selection
@@ -54,14 +84,12 @@ class CutManager:
             return pathList
         end tell
         '''
-        print("[DEBUG] 获取 Finder 选中文件...")
         output = _run_script(script)
-        print(f"[DEBUG] 原始输出: '{output}'")
         if output:
             result = [p.strip() for p in output.split(', ') if p.strip()]
         else:
             result = []
-        print(f"[DEBUG] 解析结果: {result}")
+        print(f"[6.1] [CutManager] 获取到 {len(result)} 个文件: {result}")
         return result
     
     def get_finder_current_folder(self) -> str:
@@ -81,64 +109,92 @@ class CutManager:
         return _run_script(script)
     
     def _is_same_selection(self, current: list, last: list) -> bool:
-        """判断两次选择是否相同（使用集合比较，忽略顺序）"""
+        """
+        判断两次选择是否相同
+        
+        【选择比较机制】
+        使用 set() 比较文件列表，忽略顺序。例如：
+        - ["file1", "file2"] 和 ["file2", "file1"] → 相同
+        - [] 和 None → 相同（都视为空选择）
+        - ["file1"] 和 ["file2"] → 不同
+        
+        Args:
+            current: 当前选择的文件列表
+            last: 上一次选择的文件列表（可能是 None）
+            
+        Returns:
+            bool: 如果选择相同返回 True，否则返回 False
+        """
+        # 空列表和 None 都视为空选择
+        if not current and not last:
+            print("[6.2] [CutManager] 选择比较: 都是空选择，视为相同")
+            return True
         if not current or not last:
+            print(f"[6.2] [CutManager] 选择比较: 一个为空一个不为空，不同")
             return False
-        return set(current) == set(last)
+        
+        is_same = set(current) == set(last)
+        print(f"[6.2] [CutManager] 选择比较: current={set(current)}, last={set(last)}, 结果={is_same}")
+        return is_same
     
     def cut(self) -> tuple:
         """
-        剪切选中的文件
+        处理文件选择（按照流程图逻辑）
+        
+        【工作流程】
+        1. 获取 Finder 选中的文件
+        2. 比较当前选择和上一次选择
+        3. 更新 last_selection（记录当前选择）
+        4. 如果没有文件 → 返回 (False, False)
+        5. 如果选择相同 → 返回 (True, True)，触发智能操作弹窗
+        6. 如果选择不同 → 执行剪切，更新 cut_files，返回 (True, False)
         
         Returns:
             tuple: (success: bool, should_show_dialog: bool)
-                - success: 是否成功剪切
-                - should_show_dialog: 是否应该显示智能操作弹窗（当前选择和上次相同）
+                - success: 是否成功处理（有文件且有效）
+                - should_show_dialog: 是否应该显示智能操作弹窗（选择与上次相同）
         """
-        print("[DEBUG] cut_manager.cut() 进入")
+        print("[6] [CutManager] cut() 开始处理文件选择")
         
+        # 【步骤 6.1】获取 Finder 选中的文件
         files = self.get_finder_selection()
-        print(f"[DEBUG] cut_manager.cut() 获取的文件列表: {files}")
-        print(f"[DEBUG] cut_manager.cut() 当前 last_selection: {self.last_selection}")
         
+        # 如果没有选中文件，记录空列表
         if not files:
-            print("[DEBUG] cut_manager.cut() 未选中文件")
-            self.last_selection = None
-            print(f"[DEBUG] cut_manager.cut() 重置 last_selection=None")
-            return False, False
+            files = []
         
-        valid = [f for f in files if Path(f).exists()]
-        print(f"[DEBUG] cut_manager.cut() 验证后的文件列表: {valid}")
+        # 【步骤 6.2】比较当前选择和上一次选择
+        print(f"[6.2] [CutManager] 比较选择 - current={files}, last={self.last_selection}")
+        is_same = self._is_same_selection(files, self.last_selection)
         
-        if not valid:
-            print("[DEBUG] cut_manager.cut() 文件不存在")
-            self.last_selection = None
-            print(f"[DEBUG] cut_manager.cut() 重置 last_selection=None")
-            return False, False
-        
-        # 比较当前选择和上一次选择
-        print(f"[DEBUG] cut_manager.cut() 比较选择: current={valid}, last={self.last_selection}")
-        is_same = self._is_same_selection(valid, self.last_selection)
-        print(f"[DEBUG] cut_manager.cut() 选择比较结果: is_same={is_same}")
-        
-        # 更新上一次选择
+        # 【步骤 6.3】更新 last_selection（记录当前选择，不管文件是否存在）
         old_last_selection = self.last_selection
-        self.last_selection = valid.copy()
-        print(f"[DEBUG] cut_manager.cut() 更新 last_selection: {old_last_selection} -> {self.last_selection}")
+        self.last_selection = files.copy() if files else []
+        print(f"[6.3] [CutManager] 更新 last_selection: {old_last_selection} -> {self.last_selection}")
         
-        # 如果和上次相同，触发弹窗；否则执行剪切
+        # 【步骤 6.4】如果没有文件，不执行任何操作
+        if not files:
+            print("[6.4] [CutManager] 未选中文件，返回 (False, False)")
+            return False, False
+        
+        # 【步骤 6.5】验证文件是否存在（只在执行剪切时验证，弹窗时不需要验证）
+        valid = [f for f in files if Path(f).exists()]
+        if not valid:
+            print("[6.5] [CutManager] 文件不存在，返回 (False, False)")
+            return False, False
+        
+        # 【步骤 6.6】如果选择相同，触发智能操作弹窗
         if is_same:
-            print("[DEBUG] cut_manager.cut() 选择与上次相同，触发智能操作")
-            print(f"[DEBUG] cut_manager.cut() 返回: (True, True)")
+            print("[6.6] [CutManager] 选择与上次相同，触发智能操作弹窗")
+            print("[6.6] [CutManager] 返回 (True, True)")
             return True, True
         
-        # 选择不同，执行剪切
-        print("[DEBUG] cut_manager.cut() 选择不同，执行剪切")
+        # 【步骤 6.7】选择不同，执行剪切操作
+        print("[6.7] [CutManager] 选择不同，执行剪切操作")
         self.cut_files = valid
-        print(f"[DEBUG] cut_manager.cut() 更新 cut_files: {self.cut_files}")
-        print(f"[DEBUG] cut_manager.cut() 已剪切 {len(valid)} 个文件")
+        print(f"[6.7] [CutManager] 更新 cut_files: {len(valid)} 个文件")
         self._notify()
-        print(f"[DEBUG] cut_manager.cut() 返回: (True, False)")
+        print("[6.7] [CutManager] 返回 (True, False)")
         return True, False
     
     def paste(self) -> tuple:

@@ -84,7 +84,18 @@ class LicenseManager:
         return self._elapsed_days() >= TRIAL_DAYS
     
     def is_valid(self) -> bool:
-        return self.is_activated or not self.is_expired()
+        """
+        检查许可证是否有效
+        
+        Returns:
+            bool: 如果已激活或试用期未过期返回 True，否则返回 False
+        """
+        from cedar.utils import print
+        is_activated = self.is_activated
+        is_expired = self.is_expired()
+        is_valid = is_activated or not is_expired
+        print(f"[4] [License] 检查许可证 - 已激活={is_activated}, 已过期={is_expired}, 有效={is_valid}")
+        return is_valid
     
     def get_status(self) -> tuple:
         if self.is_activated:
