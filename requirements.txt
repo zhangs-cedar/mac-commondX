@@ -1,8 +1,29 @@
 # Mac CommondX 依赖
-pyobjc-core>=10.0
-pyobjc-framework-Cocoa>=10.0
-pyobjc-framework-Quartz>=10.0
-pyobjc-framework-ApplicationServices>=10.0
+
+# ==================== 核心运行时依赖（必需）====================
+pyobjc-core>=12.0
+pyobjc-framework-Cocoa>=12.0
+pyobjc-framework-Quartz>=12.0
+pyobjc-framework-ApplicationServices>=12.0
 PyYAML>=6.0
+cedar>=1.3.0
+
+# ==================== 打包工具 ====================
 pyinstaller>=6.0
-matplotlib>=3.0
+
+# ==================== 可选功能依赖 ====================
+# MD 转 HTML/PDF 功能（代码中有降级处理，未安装时使用简单转换）
+markdown>=3.0
+weasyprint>=60.0; platform_system != "Darwin"  # macOS 可使用系统工具
+pdfkit>=1.0  # 备选 PDF 转换工具
+
+# ==================== 开发工具依赖 ====================
+# 图标生成工具 (tools/generate_icons.py)
+pillow>=10.0
+
+# DMG 背景图生成工具 (tools/generate_dmg_background.py)
+opencv-python>=4.8.0
+numpy>=1.24.0
+
+# 图像处理相关（cedar.draw 可能依赖）
+matplotlib>=3.7.0
