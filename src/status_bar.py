@@ -8,16 +8,15 @@ from Foundation import NSObject, NSTimer
 from AppKit import (
     NSStatusBar, NSMenu, NSMenuItem, NSImage, NSColor, NSApplication,
     NSSize, NSRect, NSPoint, NSBezierPath, NSAffineTransform,
-    NSUserNotificationCenter, NSUserNotification, NSButton, NSStackView, NSAlert, NSApp,
-    NSMenuDelegate
+    NSUserNotificationCenter, NSUserNotification, NSButton, NSStackView, NSAlert, NSApp
 )
 from cedar.utils import print
 
 from .archive_manager import compress_to_zip, decompress_archive
 from .utils import copy_to_clipboard
 
-# 配置文件路径
-CONFIG_PATH = Path.home() / "Library/Application Support/CommondX/user.yaml"
+# 配置文件路径（与许可证文件分离）
+CONFIG_PATH = Path.home() / "Library/Application Support/CommondX/config.yaml"
 
 # 所有可用的智能操作选项
 SMART_OPS_OPTIONS = {
@@ -39,7 +38,7 @@ def _add_menu_item(menu, target, title, action=None, key="", enabled=True):
     return item
 
 
-class StatusBarIcon(NSObject, NSMenuDelegate):
+class StatusBarIcon(NSObject):
     """状态栏图标"""
     
     def initWithCutManager_(self, cut_manager):
@@ -52,8 +51,6 @@ class StatusBarIcon(NSObject, NSMenuDelegate):
             self.cached_files = []  # 缓存上次获取的文件列表
             self.enabled_ops = self._load_smart_ops_config()  # 加载配置
             self.ops_order = self._load_smart_ops_order()  # 加载顺序配置
-            self._config_menu_should_stay_open = False  # 配置菜单是否应该保持打开
-            self._config_menu_reopen_timer = None  # 菜单重新显示的定时器
             self.update_icon(0)
             self.setup_menu()
             cut_manager.on_state_change = self.on_cut_state_change
@@ -137,6 +134,8 @@ class StatusBarIcon(NSObject, NSMenuDelegate):
         """
         保存智能操作顺序配置
         
+        注意：配置文件已与许可证文件分离，只包含配置相关字段
+        
         Args:
             order: 选项 key 的顺序列表
         """
@@ -144,7 +143,7 @@ class StatusBarIcon(NSObject, NSMenuDelegate):
         try:
             CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
             
-            # 读取现有配置（保留其他配置项）
+            # 读取现有配置（只包含配置相关字段）
             data = {}
             if CONFIG_PATH.exists():
                 data = yaml.safe_load(CONFIG_PATH.read_text()) or {}
@@ -161,19 +160,20 @@ class StatusBarIcon(NSObject, NSMenuDelegate):
         保存智能操作配置
         
         按照流程图设计：配置保存后立即生效
+        注意：配置文件已与许可证文件分离，只包含配置相关字段
         """
         print(f"[DEBUG] [StatusBar] 保存智能操作配置: {enabled}")
         try:
             CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
             print(f"[DEBUG] [StatusBar] 配置文件路径: {CONFIG_PATH}")
             
-            # 读取现有配置（保留其他配置项）
+            # 读取现有配置（只包含配置相关字段）
             data = {}
             if CONFIG_PATH.exists():
                 data = yaml.safe_load(CONFIG_PATH.read_text()) or {}
                 print(f"[DEBUG] [StatusBar] 读取现有配置: {list(data.keys())}")
             
-            # 更新智能操作配置
+            # 更新配置相关字段
             data['smart_ops'] = enabled
             # 同时保存顺序配置（如果存在）
             if hasattr(self, 'ops_order') and self.ops_order:
@@ -372,7 +372,6 @@ class StatusBarIcon(NSObject, NSMenuDelegate):
         _add_menu_item(menu, self, "退出", "quit:", "q")
         
         self.menu = menu
-        menu.setDelegate_(self)  # 设置菜单委托，用于拦截关闭事件
         self.status_item.setMenu_(menu)
         print("[DEBUG] [StatusBar] ✓ 菜单设置完成")
     
@@ -476,6 +475,11 @@ class StatusBarIcon(NSObject, NSMenuDelegate):
             main_item.setSubmenu_(submenu)
             menu.addItem_(main_item)
             print(f"[DEBUG] [StatusBar] 已添加配置项: {option['title']} (状态={'启用' if is_enabled else '禁用'})")
+        
+        # 【步骤 3】添加分隔线和编辑配置文件选项
+        menu.addItem_(NSMenuItem.separatorItem())
+        _add_menu_item(menu, self, "📝 编辑配置文件", "openConfigFile:")
+        print("[DEBUG] [StatusBar] 已添加编辑配置文件选项")
         
         print(f"[DEBUG] [StatusBar] ✓ 配置选项菜单构建完成")
         return menu
@@ -636,12 +640,6 @@ class StatusBarIcon(NSObject, NSMenuDelegate):
             # 重新构建菜单
             self._rebuild_menus()
             
-            # 设置标志位，保持菜单打开
-            self._config_menu_should_stay_open = True
-            
-            # 延迟重新显示菜单
-            self._reopen_config_menu_after_delay()
-            
             option_title = SMART_OPS_OPTIONS[key]['title']
             print(f"[DEBUG] [StatusBar] ✓ {option_title} 已上移")
         except ValueError:
@@ -680,12 +678,6 @@ class StatusBarIcon(NSObject, NSMenuDelegate):
             # 重新构建菜单
             self._rebuild_menus()
             
-            # 设置标志位，保持菜单打开
-            self._config_menu_should_stay_open = True
-            
-            # 延迟重新显示菜单
-            self._reopen_config_menu_after_delay()
-            
             option_title = SMART_OPS_OPTIONS[key]['title']
             print(f"[DEBUG] [StatusBar] ✓ {option_title} 已下移")
         except ValueError:
@@ -711,76 +703,6 @@ class StatusBarIcon(NSObject, NSMenuDelegate):
                 print("[DEBUG] [StatusBar] ✓ 配置选项子菜单已更新")
         
         print("[DEBUG] [StatusBar] ✓ 菜单重建完成")
-    
-    def menuWillClose_(self, menu):
-        """
-        菜单即将关闭时调用（NSMenuDelegate 协议）
-        
-        如果配置菜单应该保持打开，则重新显示菜单
-        """
-        # 检查是否是配置子菜单或主菜单关闭
-        is_config_menu = (menu == self.config_menu)
-        is_main_menu = (menu == self.menu)
-        
-        if self._config_menu_should_stay_open and (is_config_menu or is_main_menu):
-            print("[DEBUG] [StatusBar] 检测到配置菜单应该保持打开，准备重新显示")
-            self._config_menu_should_stay_open = False
-            # 延迟重新显示，避免立即关闭
-            self._reopen_config_menu_after_delay()
-    
-    def _reopen_config_menu_after_delay(self):
-        """
-        延迟重新显示配置菜单
-        
-        使用定时器延迟一小段时间后重新显示菜单，确保菜单已关闭
-        """
-        # 取消之前的定时器
-        if self._config_menu_reopen_timer:
-            self._config_menu_reopen_timer.invalidate()
-        
-        # 延迟 0.1 秒后重新显示菜单
-        self._config_menu_reopen_timer = NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
-            0.1, self, "_reopen_config_menu:", None, False
-        )
-        print("[DEBUG] [StatusBar] 已设置菜单重新显示定时器（0.1秒后）")
-    
-    def _reopen_config_menu_(self, timer):
-        """
-        重新显示配置菜单
-        
-        在配置菜单关闭后，重新显示更新后的菜单
-        显示主菜单并自动展开配置选项子菜单
-        """
-        print("[DEBUG] [StatusBar] 重新显示配置菜单...")
-        
-        # 获取状态栏按钮
-        button = self.status_item.button()
-        if not button:
-            print("[ERROR] [StatusBar] 无法获取状态栏按钮，菜单重新显示失败")
-            return
-        
-        # 查找配置选项菜单项
-        config_item = None
-        for item in self.menu.itemArray():
-            if item.title() == "配置选项":
-                config_item = item
-                break
-        
-        if not config_item:
-            print("[ERROR] [StatusBar] 未找到配置选项菜单项")
-            return
-        
-        # 获取按钮位置
-        frame = button.frame()
-        point = NSPoint(frame.origin.x, frame.origin.y - frame.size.height)
-        
-        # 显示主菜单，定位到配置选项菜单项
-        # popUpMenuPositioningItem 会自动展开子菜单（如果菜单项有子菜单）
-        self.menu.popUpMenuPositioningItem_atLocation_inView_(
-            config_item, point, button
-        )
-        
-        print("[DEBUG] [StatusBar] ✓ 配置菜单已重新显示（主菜单+配置子菜单）")
     
     def show_smart_operations_menu(self, files):
         """
@@ -981,6 +903,47 @@ class StatusBarIcon(NSObject, NSMenuDelegate):
             return is_autostart_enabled()
         except:
             return False
+    
+    @objc.IBAction
+    def openConfigFile_(self, sender):
+        """
+        打开配置文件进行编辑
+        
+        使用系统默认编辑器打开配置文件，方便用户直接编辑
+        """
+        print("[DEBUG] [StatusBar] 打开配置文件进行编辑...")
+        try:
+            import subprocess
+            
+            # 确保配置文件存在
+            if not CONFIG_PATH.exists():
+                # 创建默认配置文件（只包含配置相关字段，不包含许可证字段）
+                CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+                default_config = {
+                    'smart_ops': {key: True for key in SMART_OPS_OPTIONS.keys()},
+                    'smart_ops_order': list(SMART_OPS_OPTIONS.keys())
+                }
+                CONFIG_PATH.write_text(yaml.dump(default_config))
+                print(f"[DEBUG] [StatusBar] 创建默认配置文件: {CONFIG_PATH}（仅配置字段）")
+            
+            # 使用系统默认编辑器打开文件
+            # macOS 使用 'open -t' 命令打开文件，-t 表示使用默认文本编辑器
+            result = subprocess.run(['open', '-t', str(CONFIG_PATH)], 
+                                  capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                print(f"[DEBUG] [StatusBar] ✓ 配置文件已打开: {CONFIG_PATH}")
+                # 提示用户不要编辑许可证相关字段
+                self.send_notification(
+                    "📝 配置文件已打开", 
+                    f"配置文件路径:\n{CONFIG_PATH}\n\n✅ 配置文件已与许可证文件分离"
+                )
+            else:
+                print(f"[ERROR] [StatusBar] 打开配置文件失败: {result.stderr}")
+                self.send_notification("❌ 打开失败", "无法打开配置文件，请检查文件权限")
+        except Exception as e:
+            print(f"[ERROR] [StatusBar] 打开配置文件时出错: {e}")
+            self.send_notification("❌ 打开失败", f"错误: {str(e)}")
     
     @objc.IBAction
     def showAbout_(self, sender):

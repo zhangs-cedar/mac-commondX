@@ -13,19 +13,22 @@ SECRET_KEY = b"cedar_commondx_2026_secret"
 TRIAL_DAYS = 21
 DAY_SECS = 86400
 
-USER_DATA = Path.home() / "Library/Application Support/CommondX/user.yaml"
-USER_DATA.parent.mkdir(parents=True, exist_ok=True)
+# 许可证文件路径（与配置文件分离）
+LICENSE_PATH = Path.home() / "Library/Application Support/CommondX/license.yaml"
+LICENSE_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 def _load() -> dict:
+    """加载许可证数据"""
     try:
-        return yaml.safe_load(USER_DATA.read_text()) or {} if USER_DATA.exists() else {}
+        return yaml.safe_load(LICENSE_PATH.read_text()) or {} if LICENSE_PATH.exists() else {}
     except:
         return {}
 
 
 def _save(data: dict):
-    USER_DATA.write_text(yaml.dump(data))
+    """保存许可证数据到新文件"""
+    LICENSE_PATH.write_text(yaml.dump(data))
 
 
 class LicenseManager:
