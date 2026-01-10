@@ -369,6 +369,10 @@ class StatusBarIcon(NSObject):
         # 【步骤 6】关于和退出
         print("[DEBUG] [StatusBar] 添加关于和退出...")
         _add_menu_item(menu, self, "关于", "showAbout:")
+        # 如果未激活且可以延长试用期，显示延长选项
+        from .license_manager import license_manager
+        if not license_manager.is_activated and license_manager.can_extend_trial():
+            _add_menu_item(menu, self, "延长试用期（7天）", "extendTrial:")
         _add_menu_item(menu, self, "退出", "quit:", "q")
         
         self.menu = menu
@@ -947,9 +951,84 @@ class StatusBarIcon(NSObject):
     
     @objc.IBAction
     def showAbout_(self, sender):
-        from AppKit import NSApp
+        from AppKit import NSApp, NSWorkspace, NSURL
         NSApp.activateIgnoringOtherApps_(True)
-        self._show_alert("✂️ CommondX", "Mac 文件剪切移动工具\n\n• ⌘+X 剪切\n• ⌘+V 移动\n\n版本: 1.0.0\n作者: Cedar 🐱\n微信: z858998813")
+        from .license_manager import license_manager
+        
+        # 构建关于信息
+        about_text = "Mac 文件剪切移动工具\n\n• ⌘+X 剪切\n• ⌘+V 移动\n\n版本: 1.0.0\n作者: Cedar 🐱\n微信: z858998813"
+        
+        # 添加许可证状态
+        if license_manager.is_activated:
+            about_text += "\n\n✓ 已激活"
+        else:
+            rem = license_manager.remaining_days()
+            if rem > 0:
+                about_text += f"\n\n⏰ 试用期剩余 {rem} 天"
+            else:
+                about_text += "\n\n⚠️ 试用期已结束"
+                if license_manager.can_extend_trial():
+                    about_text += "\n💡 可延长试用期7天"
+        
+        # 显示关于对话框
+        alert = NSAlert.alloc().init()
+        alert.setMessageText_("✂️ CommondX")
+        alert.setInformativeText_(about_text)
+        alert.setAlertStyle_(0)  # NSInformationalAlertStyle
+        
+        # 添加网址链接按钮
+        website_btn = alert.addButtonWithTitle_("访问官网")
+        website_btn.setKeyEquivalent_("")
+        
+        # 如果未激活且可以延长，添加延长按钮
+        if not license_manager.is_activated and license_manager.can_extend_trial():
+            extend_btn = alert.addButtonWithTitle_("延长试用期（7天）")
+            extend_btn.setKeyEquivalent_("")
+        
+        # 添加关闭按钮
+        alert.addButtonWithTitle_("关闭")
+        
+        # 显示对话框
+        response = alert.runModal()
+        
+        # 处理按钮点击
+        # NSAlertFirstButtonReturn = 1000, NSAlertSecondButtonReturn = 1001, NSAlertThirdButtonReturn = 1002
+        if not license_manager.is_activated and license_manager.can_extend_trial():
+            # 有延长按钮的情况：第一个是访问官网，第二个是延长试用期，第三个是关闭
+            if response == 1000:  # 访问官网
+                website_url = "https://github.com/zhangs-cedar/mac-commondX"
+                NSWorkspace.sharedWorkspace().openURL_(NSURL.URLWithString_(website_url))
+                print(f"[DEBUG] [StatusBar] 打开官网: {website_url}")
+            elif response == 1001:  # 延长试用期
+                self.extendTrial_(None)
+        else:
+            # 没有延长按钮的情况：第一个是访问官网，第二个是关闭
+            if response == 1000:  # 访问官网
+                website_url = "https://github.com/zhangs-cedar/mac-commondX"
+                NSWorkspace.sharedWorkspace().openURL_(NSURL.URLWithString_(website_url))
+                print(f"[DEBUG] [StatusBar] 打开官网: {website_url}")
+    
+    @objc.IBAction
+    def extendTrial_(self, sender):
+        """延长试用期7天"""
+        from .license_manager import license_manager
+        
+        if license_manager.is_activated:
+            self.send_notification("ℹ️ 提示", "已激活，无需延长")
+            return
+        
+        if not license_manager.can_extend_trial():
+            self.send_notification("⏰ 提示", "距离上次延长不足7天，无法延长")
+            return
+        
+        success = license_manager.extend_trial()
+        if success:
+            rem = license_manager.remaining_days()
+            self.send_notification("✅ 延长成功", f"试用期已延长7天，剩余 {rem} 天")
+            # 刷新菜单（更新许可证状态显示）
+            self.setup_menu()
+        else:
+            self.send_notification("❌ 延长失败", "无法延长试用期")
     
     @objc.IBAction
     def quit_(self, sender):

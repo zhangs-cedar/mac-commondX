@@ -11,6 +11,8 @@ from cedar.utils import print
 
 SECRET_KEY = b"cedar_commondx_2026_secret"
 TRIAL_DAYS = 21
+EXTEND_DAYS = 7  # 每次延长7天
+EXTEND_INTERVAL_DAYS = 7  # 每7天可以延长一次
 DAY_SECS = 86400
 
 # 许可证文件路径（与配置文件分离）
@@ -99,6 +101,55 @@ class LicenseManager:
         is_valid = is_activated or not is_expired
         print(f"[4] [License] 检查许可证 - 已激活={is_activated}, 已过期={is_expired}, 有效={is_valid}")
         return is_valid
+    
+    def can_extend_trial(self) -> bool:
+        """
+        检查是否可以延长试用期
+        
+        每7天可以延长一次，延长7天
+        
+        Returns:
+            bool: 如果可以延长返回 True，否则返回 False
+        """
+        if self.is_activated:
+            return False
+        
+        last_extend = self._data.get('last_extend_time', 0)
+        if last_extend == 0:
+            # 从未延长过，可以延长
+            return True
+        
+        elapsed_since_extend = (time.time() - last_extend) / DAY_SECS
+        can_extend = elapsed_since_extend >= EXTEND_INTERVAL_DAYS
+        print(f"[DEBUG] [License] 检查是否可以延长试用期 - 上次延长: {last_extend}, 已过 {elapsed_since_extend:.1f} 天, 可延长: {can_extend}")
+        return can_extend
+    
+    def extend_trial(self) -> bool:
+        """
+        延长试用期7天
+        
+        每7天可以延长一次，延长7天
+        
+        Returns:
+            bool: 如果延长成功返回 True，否则返回 False
+        """
+        if self.is_activated:
+            print("[DEBUG] [License] 已激活，无需延长")
+            return False
+        
+        if not self.can_extend_trial():
+            print("[DEBUG] [License] 距离上次延长不足7天，无法延长")
+            return False
+        
+        # 延长试用期：将 trial_start 向前推7天
+        self.trial_start -= EXTEND_DAYS * DAY_SECS
+        self._data['trial_start'] = self.trial_start
+        self._data['last_extend_time'] = time.time()
+        _save(self._data)
+        
+        rem = self.remaining_days()
+        print(f"[DEBUG] [License] ✓ 试用期已延长7天，剩余 {rem} 天")
+        return True
     
     def get_status(self) -> tuple:
         if self.is_activated:
