@@ -98,11 +98,11 @@ class CommondXApp(NSObject):
         
         print("CommondX 已启动")
         msgs = {
-            "activated": "已启动，⌘+X 剪切文件",
             "trial": f"试用期剩余 {self.remaining} 天",
-            "expired": "试用期已结束，请购买激活码"
+            "expired": "试用期已结束，请购买激活码延长1年"
         }
-        self.status_bar.send_notification("CommondX", msgs.get(self.license_status, ""))
+        msg = msgs.get(self.license_status, "已启动，⌘+X 剪切文件")
+        self.status_bar.send_notification("CommondX", msg)
     
     def _on_license_invalid(self):
         """

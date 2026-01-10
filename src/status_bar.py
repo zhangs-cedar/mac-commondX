@@ -316,12 +316,15 @@ class StatusBarIcon(NSObject):
         
         # 【步骤 1】许可信息
         print(f"[DEBUG] [StatusBar] 添加许可信息区域 - status={status}")
-        if status != "activated":
-            title = f"试用期 (剩余 {remaining} 天)" if status == "trial" else "⚠ 试用期已结束"
+        # 显示许可证状态（激活码激活延长1年，显示剩余天数）
+        if status == "trial":
+            title = f"试用期 (剩余 {remaining} 天)"
             _add_menu_item(menu, self, title, enabled=False)
             _add_menu_item(menu, self, "激活 / 购买...", "showActivationInput:")
         else:
-             _add_menu_item(menu, self, "✓ 已激活", enabled=False)
+            # 已过期
+            _add_menu_item(menu, self, "⚠ 试用期已结束", enabled=False)
+            _add_menu_item(menu, self, "激活 / 购买...", "showActivationInput:")
 
         menu.addItem_(NSMenuItem.separatorItem())
         
@@ -369,9 +372,9 @@ class StatusBarIcon(NSObject):
         # 【步骤 6】关于和退出
         print("[DEBUG] [StatusBar] 添加关于和退出...")
         _add_menu_item(menu, self, "关于", "showAbout:")
-        # 如果未激活且可以延长试用期，显示延长选项
+        # 如果可以延长试用期，显示延长选项
         from .license_manager import license_manager
-        if not license_manager.is_activated and license_manager.can_extend_trial():
+        if license_manager.can_extend_trial():
             _add_menu_item(menu, self, "延长试用期（7天）", "extendTrial:")
         _add_menu_item(menu, self, "退出", "quit:", "q")
         
@@ -515,7 +518,8 @@ class StatusBarIcon(NSObject):
                 ok, code = self._show_alert("🔑 输入激活码", "请输入激活码：", True)
                 if ok and code:
                     if license_manager.activate(code):
-                        self._show_alert("🎉 激活成功", "感谢支持！祝您使用愉快～")
+                        rem = license_manager.remaining_days()
+                        self._show_alert("🎉 激活成功", f"感谢支持！试用期已延长1年，剩余 {rem} 天")
                         self.setup_menu()
                         break  # 激活成功退出
                     else:
@@ -958,17 +962,16 @@ class StatusBarIcon(NSObject):
         # 构建关于信息
         about_text = "Mac 文件剪切移动工具\n\n• ⌘+X 剪切\n• ⌘+V 移动\n\n版本: 1.0.0\n作者: Cedar 🐱\n微信: z858998813"
         
-        # 添加许可证状态
-        if license_manager.is_activated:
-            about_text += "\n\n✓ 已激活"
+        # 添加许可证状态（激活码激活延长1年，显示剩余天数）
+        rem = license_manager.remaining_days()
+        if rem > 0:
+            about_text += f"\n\n⏰ 试用期剩余 {rem} 天"
+            if license_manager.has_activation_code():
+                about_text += "\n💡 已使用激活码延长"
         else:
-            rem = license_manager.remaining_days()
-            if rem > 0:
-                about_text += f"\n\n⏰ 试用期剩余 {rem} 天"
-            else:
-                about_text += "\n\n⚠️ 试用期已结束"
-                if license_manager.can_extend_trial():
-                    about_text += "\n💡 可延长试用期7天"
+            about_text += "\n\n⚠️ 试用期已结束"
+            if license_manager.can_extend_trial():
+                about_text += "\n💡 可延长试用期7天"
         
         # 显示关于对话框
         alert = NSAlert.alloc().init()
@@ -980,8 +983,9 @@ class StatusBarIcon(NSObject):
         website_btn = alert.addButtonWithTitle_("访问官网")
         website_btn.setKeyEquivalent_("")
         
-        # 如果未激活且可以延长，添加延长按钮
-        if not license_manager.is_activated and license_manager.can_extend_trial():
+        # 如果可以延长，添加延长按钮
+        has_extend_btn = license_manager.can_extend_trial()
+        if has_extend_btn:
             extend_btn = alert.addButtonWithTitle_("延长试用期（7天）")
             extend_btn.setKeyEquivalent_("")
         
@@ -993,7 +997,7 @@ class StatusBarIcon(NSObject):
         
         # 处理按钮点击
         # NSAlertFirstButtonReturn = 1000, NSAlertSecondButtonReturn = 1001, NSAlertThirdButtonReturn = 1002
-        if not license_manager.is_activated and license_manager.can_extend_trial():
+        if has_extend_btn:
             # 有延长按钮的情况：第一个是访问官网，第二个是延长试用期，第三个是关闭
             if response == 1000:  # 访问官网
                 website_url = "https://github.com/zhangs-cedar/mac-commondX"
@@ -1012,10 +1016,6 @@ class StatusBarIcon(NSObject):
     def extendTrial_(self, sender):
         """延长试用期7天"""
         from .license_manager import license_manager
-        
-        if license_manager.is_activated:
-            self.send_notification("ℹ️ 提示", "已激活，无需延长")
-            return
         
         if not license_manager.can_extend_trial():
             self.send_notification("⏰ 提示", "距离上次延长不足7天，无法延长")
