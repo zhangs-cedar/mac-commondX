@@ -322,11 +322,37 @@ class StatusBarIcon(NSObject):
         if status == "trial":
             title = f"试用期 (剩余 {remaining} 天)"
             _add_menu_item(menu, self, title, enabled=False)
-            _add_menu_item(menu, self, "激活 / 购买...", "showActivationInput:")
         else:
             # 已过期
             _add_menu_item(menu, self, "⚠ 试用期已结束", enabled=False)
-            _add_menu_item(menu, self, "激活 / 购买...", "showActivationInput:")
+        
+        # 创建"激活 / 购买"子菜单
+        activation_menu = NSMenu.alloc().init()
+        
+        # 机器码显示（禁用项，仅显示）
+        machine_code_title = f"机器码: {license_manager.machine_code}"
+        _add_menu_item(activation_menu, self, machine_code_title, enabled=False)
+        activation_menu.addItem_(NSMenuItem.separatorItem())
+        
+        # 购买激活码
+        _add_menu_item(activation_menu, self, "⭐ 购买激活码", "openBuyPage:")
+        
+        # 复制机器码
+        _add_menu_item(activation_menu, self, "📋 复制机器码", "copyMachineCode:")
+        
+        # 访问官网续7天
+        _add_menu_item(activation_menu, self, "🌐 访问官网续7天", "visitWebsiteExtendTrial:")
+        
+        activation_menu.addItem_(NSMenuItem.separatorItem())
+        
+        # 输入激活码
+        _add_menu_item(activation_menu, self, "🔑 输入激活码", "showActivationInput:")
+        
+        # 主菜单项：激活 / 购买
+        activation_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("激活 / 购买", None, "")
+        activation_item.setSubmenu_(activation_menu)
+        menu.addItem_(activation_item)
+        print("[DEBUG] [StatusBar] ✓ 激活/购买子菜单已添加")
         
         # 如果可以延长试用期，在许可信息区域显示延长选项
         if license_manager.can_extend_trial():
@@ -495,58 +521,63 @@ class StatusBarIcon(NSObject):
     
     @objc.IBAction
     def showActivationInput_(self, sender):
-        """激活/购买"""
+        """输入激活码（简洁输入框）"""
         from .license_manager import license_manager
-        from AppKit import NSAlert, NSApp
         
-        NSApp.setActivationPolicy_(0)
-        NSApp.activateIgnoringOtherApps_(True)
-        
-        while True:
-            alert = NSAlert.alloc().init()
-            alert.setMessageText_("CommondX 激活")
-            alert.setInformativeText_(f"机器码: {license_manager.machine_code}\n\n请选择操作：")
-            alert.addButtonWithTitle_("⭐ 购买激活码")
-            alert.addButtonWithTitle_("输入激活码")
-            alert.addButtonWithTitle_("复制机器码")
-            alert.addButtonWithTitle_("关闭")
-            
-            resp = alert.runModal()
-            
-            if resp == 1000:  # 购买激活码
-                self.openBuyPage_(sender)
-                # 继续显示弹窗
-            elif resp == 1001:  # 输入激活码
-                ok, code = self._show_alert("🔑 输入激活码", "请输入激活码：", True)
-                if ok and code:
-                    if license_manager.activate(code):
-                        rem = license_manager.remaining_days()
-                        self._show_alert("🎉 激活成功", f"感谢支持！试用期已延长1年，剩余 {rem} 天")
-                        self.setup_menu()
-                        break  # 激活成功退出
-                    else:
-                        self._show_alert("❌ 激活失败", "激活码无效，请检查后重试")
-                # 继续显示弹窗
-            elif resp == 1002:  # 复制机器码
-                copy_to_clipboard(license_manager.machine_code)
-                self.send_notification("✅ 已复制", "机器码已复制到剪贴板")
-                # 继续显示弹窗
-            else:  # 关闭
-                break
-        
-        NSApp.setActivationPolicy_(2)
+        # 显示简洁输入框
+        ok, code = self._show_alert("🔑 输入激活码", "请输入激活码：", True)
+        if ok and code:
+            if license_manager.activate(code):
+                rem = license_manager.remaining_days()
+                # 使用通知显示成功消息，不弹窗
+                self.send_notification("🎉 激活成功", f"试用期已延长1年，剩余 {rem} 天")
+                self.setup_menu()  # 刷新菜单
+            else:
+                # 使用通知显示失败消息，不弹窗
+                self.send_notification("❌ 激活失败", "激活码无效，请检查后重试")
 
     @objc.IBAction
     def copyMachineCode_(self, sender):
-         copy_to_clipboard(sender)
+        """复制机器码"""
+        from .license_manager import license_manager
+        copy_to_clipboard(license_manager.machine_code)
+        self.send_notification("✅ 已复制", "机器码已复制到剪贴板")
+    
+    @objc.IBAction
+    def visitWebsiteExtendTrial_(self, sender):
+        """访问官网续7天"""
+        from AppKit import NSWorkspace, NSURL
+        from .license_manager import license_manager
+        
+        # 先检查是否可以延长
+        if not license_manager.can_extend_trial():
+            self.send_notification("⏰ 无法续期", "距离上次延长不足7天，无法延长")
+            return
+        
+        # 打开官网
+        website_url = "https://github.com/zhangs-cedar/mac-commondX"
+        NSWorkspace.sharedWorkspace().openURL_(NSURL.URLWithString_(website_url))
+        
+        # 延长试用期7天
+        success = license_manager.extend_trial()
+        if success:
+            rem = license_manager.remaining_days()
+            self.send_notification("✅ 续期成功", f"已访问官网，试用期已延长7天，剩余 {rem} 天")
+            # 刷新菜单（更新许可证状态显示）
+            self.setup_menu()
+        else:
+            self.send_notification("❌ 续期失败", "无法延长试用期")
          
     @objc.IBAction
     def openBuyPage_(self, sender):
-        """打开购买"""
+        """打开购买页面"""
         from AppKit import NSWorkspace, NSURL
         from .license_manager import license_manager
+        # 打开购买页面
         NSWorkspace.sharedWorkspace().openURL_(NSURL.URLWithString_("https://wj.qq.com/s2/25468218/6ee1/"))
+        # 自动复制机器码到剪贴板
         copy_to_clipboard(license_manager.machine_code)
+        self.send_notification("📋 已复制机器码", "机器码已复制到剪贴板，可在购买页面直接粘贴")
 
     
     def show_activation_required(self):
