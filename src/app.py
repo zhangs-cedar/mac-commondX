@@ -25,6 +25,7 @@ from .license_manager import license_manager
 from .permission import check_accessibility, request_accessibility, open_accessibility_settings
 from .file_dialog import show_file_operations_dialog
 from .archive_manager import compress_to_zip, decompress_archive
+from .utils import copy_to_clipboard
 
 
 class CommondXApp(NSObject):
@@ -288,11 +289,8 @@ class CommondXApp(NSObject):
         
         if action == "copy":
             print("[7.3] [App] 执行复制路径操作...")
-            from AppKit import NSPasteboard, NSStringPboardType
-            pb = NSPasteboard.generalPasteboard()
-            pb.clearContents()
             paths_text = "\n".join(files)
-            pb.setString_forType_(paths_text, NSStringPboardType)
+            copy_to_clipboard(paths_text)
             count = len(files)
             msg = f"已复制 {count} 个文件路径" if count > 1 else "已复制文件路径"
             self.status_bar.send_notification("✅ 已复制路径", msg)

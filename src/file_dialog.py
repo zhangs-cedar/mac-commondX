@@ -13,40 +13,11 @@
 代码会"暂停"，直到用户选择操作。
 """
 
-import os
-from pathlib import Path
 from AppKit import (
     NSAlert, NSTextView, NSScrollView, NSApp, NSFont, NSColor,
     NSSize, NSRect, NSPoint
 )
-
-
-def _is_directory(path):
-    """判断是否为文件夹"""
-    try:
-        return os.path.isdir(path)
-    except:
-        return False
-
-
-def _is_archive_file(path):
-    """判断是否为压缩文件"""
-    if _is_directory(path):
-        return False
-    ext = Path(path).suffix.lower()
-    archive_extensions = {'.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.tgz', '.tar.gz', '.tar.bz2'}
-    return ext in archive_extensions or any(path.lower().endswith(ext) for ext in archive_extensions)
-
-
-def _format_paths_list(files):
-    """格式化路径列表，每行一个路径"""
-    lines = []
-    for path in files:
-        if _is_directory(path):
-            lines.append(f"📁 {path}")
-        else:
-            lines.append(f"📄 {path}")
-    return "\n".join(lines)
+from .utils import is_directory, is_archive_file, format_paths_list
 
 
 def show_file_operations_dialog(files):
@@ -86,8 +57,8 @@ def show_file_operations_dialog(files):
     
     # 统计文件类型
     total_count = len(files)
-    archive_count = sum(1 for f in files if _is_archive_file(f))
-    has_regular_files = any(not _is_archive_file(f) for f in files)
+    archive_count = sum(1 for f in files if is_archive_file(f))
+    has_regular_files = any(not is_archive_file(f) for f in files)
     print(f"[7.2] [FileDialog] 文件统计 - 总数={total_count}, 压缩文件={archive_count}, 有普通文件={has_regular_files}")
     
     # 构建提示文本
@@ -103,7 +74,7 @@ def show_file_operations_dialog(files):
     text_view = NSTextView.alloc().initWithFrame_(NSRect(NSPoint(0, 0), NSSize(580, 0)))
     
     # 格式化路径列表
-    paths_text = _format_paths_list(files)
+    paths_text = format_paths_list(files)
     text_view.setString_(paths_text)
     text_view.setFont_(NSFont.monospacedSystemFontOfSize_weight_(11, 0))
     text_view.setEditable_(False)

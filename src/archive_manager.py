@@ -7,6 +7,7 @@ import tarfile
 import subprocess
 from pathlib import Path
 from cedar.utils import print
+from .utils import detect_archive_type
 
 
 def compress_to_zip(files, output_path=None):
@@ -71,55 +72,6 @@ def compress_to_zip(files, output_path=None):
         return False, f"压缩失败：{str(e)}", None
 
 
-def _detect_archive_type(archive_path):
-    """检测压缩文件类型"""
-    path = Path(archive_path)
-    ext = path.suffix.lower()
-    
-    # 检查文件头
-    try:
-        with open(archive_path, 'rb') as f:
-            header = f.read(4)
-            
-        # ZIP 文件头：PK\x03\x04
-        if header[:2] == b'PK':
-            return 'zip'
-        
-        # TAR 文件头
-        if header == b'ustar' or b'ustar' in header:
-            return 'tar'
-        
-        # GZ 文件头：\x1f\x8b
-        if header[:2] == b'\x1f\x8b':
-            return 'gz'
-        
-        # RAR 文件头：Rar!
-        if header == b'Rar!':
-            return 'rar'
-        
-        # 7Z 文件头：7z\xbc\xaf
-        if header[:4] == b'7z\xbc\xaf':
-            return '7z'
-    except:
-        pass
-    
-    # 根据扩展名判断
-    if ext == '.zip':
-        return 'zip'
-    elif ext in ['.tar', '.tgz']:
-        return 'tar'
-    elif ext in ['.gz', '.tar.gz']:
-        return 'gz'
-    elif ext == '.rar':
-        return 'rar'
-    elif ext == '.7z':
-        return '7z'
-    elif ext in ['.bz2', '.tar.bz2']:
-        return 'bz2'
-    
-    return None
-
-
 def decompress_archive(archive_path, output_dir=None):
     """
     解压压缩文件
@@ -152,7 +104,7 @@ def decompress_archive(archive_path, output_dir=None):
         output_dir.mkdir(parents=True, exist_ok=True)
         
         # 检测压缩文件类型
-        archive_type = _detect_archive_type(archive_path)
+        archive_type = detect_archive_type(archive_path)
         
         if archive_type == 'zip':
             # 解压 ZIP

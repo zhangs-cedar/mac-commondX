@@ -12,6 +12,7 @@ from cedar.utils import print
 
 from .file_dialog import show_file_operations_dialog
 from .archive_manager import compress_to_zip, decompress_archive
+from .utils import copy_to_clipboard
 
 
 def _add_menu_item(menu, target, title, action=None, key="", enabled=True):
@@ -119,13 +120,6 @@ class StatusBarIcon(NSObject):
         self.status_item.setImage_(image)
         self.status_item.setTitle_(f" {count}" if count > 0 else "")
     
-    def _copy_to_clipboard(self, text):
-        """复制到剪贴板"""
-        from AppKit import NSPasteboard, NSStringPboardType
-        pb = NSPasteboard.generalPasteboard()
-        pb.clearContents()
-        pb.setString_forType_(text, NSStringPboardType)
-    
     def _show_alert(self, title, msg, with_input=False):
         """显示弹窗"""
         from AppKit import NSAlert, NSTextField, NSApp
@@ -232,7 +226,7 @@ class StatusBarIcon(NSObject):
                         self._show_alert("❌ 激活失败", "激活码无效，请检查后重试")
                 # 继续显示弹窗
             elif resp == 1002:  # 复制机器码
-                self._copy_to_clipboard(license_manager.machine_code)
+                copy_to_clipboard(license_manager.machine_code)
                 self.send_notification("✅ 已复制", "机器码已复制到剪贴板")
                 # 继续显示弹窗
             else:  # 关闭
@@ -242,7 +236,7 @@ class StatusBarIcon(NSObject):
 
     @objc.IBAction
     def copyMachineCode_(self, sender):
-         self._copy_to_clipboard(sender)
+         copy_to_clipboard(sender)
          
     @objc.IBAction
     def openBuyPage_(self, sender):
@@ -250,7 +244,7 @@ class StatusBarIcon(NSObject):
         from AppKit import NSWorkspace, NSURL
         from .license_manager import license_manager
         NSWorkspace.sharedWorkspace().openURL_(NSURL.URLWithString_("https://wj.qq.com/s2/25468218/6ee1/"))
-        self._copy_to_clipboard(license_manager.machine_code)
+        copy_to_clipboard(license_manager.machine_code)
 
     
     def show_activation_required(self):
@@ -286,7 +280,7 @@ class StatusBarIcon(NSObject):
         if action == "copy":
             # 复制路径
             paths_text = "\n".join(files)
-            self._copy_to_clipboard(paths_text)
+            copy_to_clipboard(paths_text)
             count = len(files)
             msg = f"已复制 {count} 个文件路径" if count > 1 else "已复制文件路径"
             self.send_notification("✅ 已复制路径", msg)

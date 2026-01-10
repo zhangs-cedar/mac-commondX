@@ -17,28 +17,9 @@
 - 空列表 [] 和 None 被视为相同（都是空选择）
 """
 
-import subprocess
 from pathlib import Path
 from cedar.utils import print
-
-
-def _run_script(script: str, timeout: int = 5) -> str:
-    """执行 AppleScript，返回输出"""
-    try:
-        r = subprocess.run(['osascript', '-e', script], capture_output=True, text=True, timeout=timeout)
-        print(f"[DEBUG] AppleScript returncode={r.returncode}")
-        print(f"[DEBUG] stdout: {r.stdout[:200] if r.stdout else '(empty)'}")
-        if r.stderr:
-            print(f"[DEBUG] stderr: {r.stderr[:200]}")
-        return r.stdout.strip() if r.returncode == 0 else ""
-    except Exception as e:
-        print(f"AppleScript 执行失败: {e}")
-        return ""
-
-
-def _escape(path: str) -> str:
-    """转义路径中的特殊字符"""
-    return path.replace('\\', '\\\\').replace('"', '\\"')
+from .utils import run_script, escape_path
 
 
 class CutManager:
@@ -84,7 +65,7 @@ class CutManager:
             return pathList
         end tell
         '''
-        output = _run_script(script)
+        output = run_script(script)
         if output:
             result = [p.strip() for p in output.split(', ') if p.strip()]
         else:
@@ -106,7 +87,7 @@ class CutManager:
                 end try
             end try
         end tell'''
-        return _run_script(script)
+        return run_script(script)
     
     def _is_same_selection(self, current: list, last: list) -> bool:
         """
@@ -221,17 +202,17 @@ class CutManager:
         if not target or not Path(target).exists():
             return False, "目标文件夹无效"
         
-        files_str = ", ".join(f'POSIX file "{_escape(f)}"' for f in self.cut_files)
+        files_str = ", ".join(f'POSIX file "{escape_path(f)}"' for f in self.cut_files)
         script = f'''tell application "Finder"
             try
-                move {{{files_str}}} to POSIX file "{_escape(target)}"
+                move {{{files_str}}} to POSIX file "{escape_path(target)}"
                 return "OK"
             on error e
                 return "Error: " & e
             end try
         end tell'''
         
-        output = _run_script(script, timeout=30)
+        output = run_script(script, timeout=30)
         if output == "OK":
             cnt = len(self.cut_files)
             self.cut_files = []
