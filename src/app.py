@@ -4,7 +4,7 @@ CommondX 应用主逻辑
 
 【工作流程说明】
 按照流程图顺序：
-1. EventTap 捕获 Cmd+X 事件
+1. EventTap 捕获 ⌘+X 事件
 2. EventTap 检查是否为 Finder 窗口
 3. EventTap 检查许可证
 4. EventTap 调用 on_cut()（如果许可证有效）
@@ -98,7 +98,7 @@ class CommondXApp(NSObject):
         
         print("CommondX 已启动")
         msgs = {
-            "activated": "已启动，Cmd+X 剪切文件",
+            "activated": "已启动，⌘+X 剪切文件",
             "trial": f"试用期剩余 {self.remaining} 天",
             "expired": "试用期已结束，请购买激活码"
         }
@@ -154,10 +154,10 @@ class CommondXApp(NSObject):
     
     def on_cut(self):
         """
-        Cmd+X 回调函数
+        ⌘+X 回调函数
         
         【调用时机】
-        当用户在 Finder 中按下 Cmd+X 时，EventTap 会调用这个函数。
+        当用户在 Finder 中按下 ⌘+X 时，EventTap 会调用这个函数。
         注意：此时已经通过了许可证检查（在 EventTap 中完成）。
         
         【工作流程】
@@ -262,7 +262,7 @@ class CommondXApp(NSObject):
     
     def on_paste(self):
         """
-        Cmd+V 回调函数
+        ⌘+V 回调函数
         
         注意：许可证检查已在 EventTap 中完成。
         """

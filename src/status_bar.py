@@ -176,8 +176,8 @@ class StatusBarIcon(NSObject):
         self.smart_ops_menu = NSMenu.alloc().init()
         
         # 添加说明项（禁用状态，仅用于提示）
-        # 当用户重复 Cmd+X 选择相同文件时，会自动显示此菜单
-        _add_menu_item(self.smart_ops_menu, self, "💡 重复 Cmd+X 时自动显示", enabled=False)
+        # 当用户重复 ⌘+X 选择相同文件时，会自动显示此菜单
+        _add_menu_item(self.smart_ops_menu, self, "💡 重复 ⌘+X 时自动显示", enabled=False)
         self.smart_ops_menu.addItem_(NSMenuItem.separatorItem())
         
         # 操作选项
@@ -493,7 +493,7 @@ class StatusBarIcon(NSObject):
     def showAbout_(self, sender):
         from AppKit import NSApp
         NSApp.activateIgnoringOtherApps_(True)
-        self._show_alert("✂️ CommondX", "Mac 文件剪切移动工具\n\n• Cmd+X 剪切\n• Cmd+V 移动\n\n版本: 1.0.0\n作者: Cedar 🐱\n微信: z858998813")
+        self._show_alert("✂️ CommondX", "Mac 文件剪切移动工具\n\n• ⌘+X 剪切\n• ⌘+V 移动\n\n版本: 1.0.0\n作者: Cedar 🐱\n微信: z858998813")
     
     @objc.IBAction
     def quit_(self, sender):

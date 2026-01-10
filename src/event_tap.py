@@ -5,13 +5,13 @@
 【事件捕获机制说明】
 Event Tap 是 macOS 提供的系统级事件拦截机制，可以捕获所有键盘和鼠标事件。
 当用户按下键盘时，系统会先调用我们的 _callback 函数，我们可以：
-1. 检查事件是否符合条件（如 Cmd+X）
+1. 检查事件是否符合条件（如 ⌘+X）
 2. 如果符合，执行我们的逻辑并返回 None（吞掉事件，阻止系统默认行为）
 3. 如果不符合，返回原事件（放行事件，让系统正常处理）
 
 【页面触发说明】
 "页面触发"指的是 Finder 窗口成为活动窗口（前台应用）。
-只有当 Finder 是当前活动应用时，我们才处理 Cmd+X 事件。
+只有当 Finder 是当前活动应用时，我们才处理 ⌘+X 事件。
 """
 
 import time
@@ -38,7 +38,7 @@ class EventTap:
     
     按照流程图顺序处理事件：
     1. 捕获键盘事件
-    2. 检查是否为 Cmd+X
+    2. 检查是否为 ⌘+X
     3. 检查是否为 Finder 窗口
     4. 检查许可证
     5. 调用 on_cut 或 on_paste
@@ -49,8 +49,8 @@ class EventTap:
         初始化事件监听器
         
         Args:
-            on_cut: Cmd+X 时的回调函数
-            on_paste: Cmd+V 时的回调函数
+            on_cut: ⌘+X 时的回调函数
+            on_paste: ⌘+V 时的回调函数
             on_license_invalid: 许可证无效时的回调函数（用于显示激活提示）
         """
         self.on_cut = on_cut
@@ -66,7 +66,7 @@ class EventTap:
         【页面触发说明】
         这个方法检查当前"活动窗口"是否是 Finder。
         活动窗口就是用户当前正在使用的窗口，也就是"前台应用"。
-        只有当 Finder 是活动窗口时，我们才处理 Cmd+X 事件。
+        只有当 Finder 是活动窗口时，我们才处理 ⌘+X 事件。
         """
         app = NSWorkspace.sharedWorkspace().frontmostApplication()
         is_finder = app and app.bundleIdentifier() == FINDER_ID
@@ -101,7 +101,7 @@ class EventTap:
                 print(f"[1] [EventTap] 非按键按下事件，放行 - event_type={event_type}")
                 return event
             
-            # 【步骤 2】检查是否为 Cmd+X 或 Cmd+V
+            # 【步骤 2】检查是否为 ⌘+X 或 ⌘+V
             keycode = CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode)
             print(f"[2] [EventTap] 检查按键 - keycode={keycode} (X=7, V=9)")
             
@@ -109,18 +109,18 @@ class EventTap:
                 print(f"[2] [EventTap] 不是 X 或 V 键，放行事件")
                 return event
             
-            # 检查修饰键（必须按下 Cmd，不能同时按下 Shift 或 Option）
+            # 检查修饰键（必须按下 ⌘，不能同时按下 Shift 或 Option）
             flags = Quartz.CGEventGetFlags(event)
             has_cmd = bool(flags & CMD)
             has_shift = bool(flags & SHIFT)
             has_opt = bool(flags & OPT)
-            print(f"[2] [EventTap] 检查修饰键 - Cmd={has_cmd}, Shift={has_shift}, Option={has_opt}")
+            print(f"[2] [EventTap] 检查修饰键 - ⌘={has_cmd}, Shift={has_shift}, Option={has_opt}")
             
             if not has_cmd or has_shift or has_opt:
                 print(f"[2] [EventTap] 修饰键不符合要求，放行事件")
                 return event
             
-            print(f"[2] [EventTap] ✓ 确认为 Cmd+X 或 Cmd+V")
+            print(f"[2] [EventTap] ✓ 确认为 ⌘+X 或 ⌘+V")
             
             # 【步骤 3】检查是否为 Finder 窗口
             is_finder = self._is_finder_active()
