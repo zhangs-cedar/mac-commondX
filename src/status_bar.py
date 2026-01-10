@@ -50,6 +50,7 @@ class StatusBarIcon(NSObject):
             self.animation_frame = 0
             self.cached_files = []  # 缓存上次获取的文件列表
             self.enabled_ops = self._load_smart_ops_config()  # 加载配置
+            self.ops_order = self._load_smart_ops_order()  # 加载顺序配置
             self.update_icon(0)
             self.setup_menu()
             cut_manager.on_state_change = self.on_cut_state_change
@@ -90,6 +91,68 @@ class StatusBarIcon(NSObject):
         print(f"[DEBUG] [StatusBar] 使用默认配置: {default}")
         return default
     
+    def _load_smart_ops_order(self):
+        """
+        加载智能操作顺序配置
+        
+        Returns:
+            list: 选项 key 的顺序列表
+        """
+        print("[DEBUG] [StatusBar] 加载智能操作顺序配置...")
+        try:
+            if CONFIG_PATH.exists():
+                data = yaml.safe_load(CONFIG_PATH.read_text()) or {}
+                order = data.get('smart_ops_order', [])
+                print(f"[DEBUG] [StatusBar] 从配置文件读取顺序: {order}")
+                
+                # 验证顺序完整性（确保所有选项都在顺序列表中）
+                all_keys = set(SMART_OPS_OPTIONS.keys())
+                order_keys = set(order)
+                
+                # 如果顺序为空或不完整，使用默认顺序
+                if not order or all_keys != order_keys:
+                    default_order = list(SMART_OPS_OPTIONS.keys())
+                    if order:
+                        # 保留现有顺序，补充缺失的项
+                        missing = all_keys - order_keys
+                        default_order = order + list(missing)
+                    self._save_smart_ops_order(default_order)
+                    print(f"[DEBUG] [StatusBar] 顺序配置不完整，使用默认顺序: {default_order}")
+                    return default_order
+                
+                print(f"[DEBUG] [StatusBar] ✓ 顺序配置加载成功: {order}")
+                return order
+        except Exception as e:
+            print(f"[ERROR] [StatusBar] 加载顺序配置失败: {e}")
+        
+        # 默认顺序：按照 SMART_OPS_OPTIONS 的定义顺序
+        default_order = list(SMART_OPS_OPTIONS.keys())
+        print(f"[DEBUG] [StatusBar] 使用默认顺序: {default_order}")
+        return default_order
+    
+    def _save_smart_ops_order(self, order):
+        """
+        保存智能操作顺序配置
+        
+        Args:
+            order: 选项 key 的顺序列表
+        """
+        print(f"[DEBUG] [StatusBar] 保存智能操作顺序配置: {order}")
+        try:
+            CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            
+            # 读取现有配置（保留其他配置项）
+            data = {}
+            if CONFIG_PATH.exists():
+                data = yaml.safe_load(CONFIG_PATH.read_text()) or {}
+            
+            # 更新顺序配置
+            data['smart_ops_order'] = order
+            CONFIG_PATH.write_text(yaml.dump(data))
+            print(f"[DEBUG] [StatusBar] ✓ 顺序配置保存成功，共 {len(order)} 个选项")
+        except Exception as e:
+            print(f"[ERROR] [StatusBar] 保存顺序配置失败: {e}")
+    
     def _save_smart_ops_config(self, enabled):
         """
         保存智能操作配置
@@ -109,6 +172,9 @@ class StatusBarIcon(NSObject):
             
             # 更新智能操作配置
             data['smart_ops'] = enabled
+            # 同时保存顺序配置（如果存在）
+            if hasattr(self, 'ops_order') and self.ops_order:
+                data['smart_ops_order'] = self.ops_order
             CONFIG_PATH.write_text(yaml.dump(data))
             print(f"[DEBUG] [StatusBar] ✓ 配置保存成功，共 {len(enabled)} 个选项")
         except Exception as e:
@@ -312,7 +378,7 @@ class StatusBarIcon(NSObject):
         
         按照流程图设计：
         1. 说明项
-        2. 操作选项（根据配置显示）
+        2. 操作选项（根据配置显示，按照配置顺序）
         """
         print("[DEBUG] [StatusBar] 构建智能操作菜单...")
         menu = NSMenu.alloc().init()
@@ -322,10 +388,16 @@ class StatusBarIcon(NSObject):
         menu.addItem_(NSMenuItem.separatorItem())
         print("[DEBUG] [StatusBar] 已添加说明项")
         
-        # 【步骤 2】根据配置添加操作选项（按照流程图：操作选项根据配置显示）
+        # 【步骤 2】根据配置和顺序添加操作选项（按照流程图：操作选项根据配置显示）
+        order = getattr(self, 'ops_order', list(SMART_OPS_OPTIONS.keys()))
+        print(f"[DEBUG] [StatusBar] 使用顺序: {order}")
+        
         enabled_count = 0
-        for key, option in SMART_OPS_OPTIONS.items():
+        for key in order:
+            if key not in SMART_OPS_OPTIONS:
+                continue
             if self.enabled_ops.get(key, True):
+                option = SMART_OPS_OPTIONS[key]
                 _add_menu_item(menu, self, option["title"], option["action"])
                 enabled_count += 1
                 print(f"[DEBUG] [StatusBar] 已添加操作选项: {option['title']}")
@@ -340,7 +412,7 @@ class StatusBarIcon(NSObject):
         
         按照流程图设计：
         1. 配置标题（禁用）
-        2. 配置选项（复选框，可点击）
+        2. 配置选项（子菜单，点击不关闭主菜单，支持排序）
         """
         print("[DEBUG] [StatusBar] 构建配置选项菜单...")
         menu = NSMenu.alloc().init()
@@ -349,18 +421,56 @@ class StatusBarIcon(NSObject):
         _add_menu_item(menu, self, "⚙️ 配置显示项", enabled=False)
         print("[DEBUG] [StatusBar] 已添加配置标题")
         
-        # 【步骤 2】为每个选项添加复选框菜单项
-        for key, option in SMART_OPS_OPTIONS.items():
-            item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
-                option['title'], "toggleSmartOp:", ""
-            )
-            item.setTarget_(self)
-            item.setRepresentedObject_(key)
-            # 设置状态：1=选中（NSOnState），0=未选中（NSOffState）
-            # NSMenuItem 会自动显示复选框，无需在标题中添加 ☑
+        # 【步骤 2】按照保存的顺序为每个选项创建子菜单
+        order = getattr(self, 'ops_order', list(SMART_OPS_OPTIONS.keys()))
+        print(f"[DEBUG] [StatusBar] 使用顺序: {order}")
+        
+        for idx, key in enumerate(order):
+            if key not in SMART_OPS_OPTIONS:
+                print(f"[WARN] [StatusBar] 跳过无效的配置项: {key}")
+                continue
+            
+            option = SMART_OPS_OPTIONS[key]
             is_enabled = self.enabled_ops.get(key, True)
-            item.setState_(1 if is_enabled else 0)
-            menu.addItem_(item)
+            
+            # 为每个配置项创建子菜单（点击不关闭主菜单）
+            submenu = NSMenu.alloc().init()
+            
+            # 子菜单项1：启用/禁用（复选框）
+            toggle_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                "启用/禁用", "toggleSmartOp:", ""
+            )
+            toggle_item.setTarget_(self)
+            toggle_item.setRepresentedObject_(key)
+            toggle_item.setState_(1 if is_enabled else 0)
+            submenu.addItem_(toggle_item)
+            
+            # 子菜单项2：上移（如果不是第一个）
+            if idx > 0:
+                move_up_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                    "↑ 上移", "moveConfigUp:", ""
+                )
+                move_up_item.setTarget_(self)
+                move_up_item.setRepresentedObject_(key)
+                submenu.addItem_(move_up_item)
+            
+            # 子菜单项3：下移（如果不是最后一个）
+            if idx < len(order) - 1:
+                move_down_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                    "↓ 下移", "moveConfigDown:", ""
+                )
+                move_down_item.setTarget_(self)
+                move_down_item.setRepresentedObject_(key)
+                submenu.addItem_(move_down_item)
+            
+            # 创建主菜单项（带子菜单）
+            # 标题显示复选框状态：☑ 或 ☐
+            checkbox = "☑" if is_enabled else "☐"
+            main_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                f"{checkbox} {option['title']}", None, ""
+            )
+            main_item.setSubmenu_(submenu)
+            menu.addItem_(main_item)
             print(f"[DEBUG] [StatusBar] 已添加配置项: {option['title']} (状态={'启用' if is_enabled else '禁用'})")
         
         print(f"[DEBUG] [StatusBar] ✓ 配置选项菜单构建完成")
@@ -482,8 +592,96 @@ class StatusBarIcon(NSObject):
         # 【步骤 3】更新菜单项状态
         sender.setState_(1 if new_state else 0)
         
-        # 【步骤 4】重新构建两个菜单（更新显示的操作项和配置项）
+        # 【步骤 4】重新构建菜单（更新显示的操作项和配置项）
         print("[DEBUG] [StatusBar] 重新构建菜单以更新显示的操作项和配置项...")
+        self._rebuild_menus()
+        
+        status = "已启用" if new_state else "已禁用"
+        print(f"[DEBUG] [StatusBar] ✓ {SMART_OPS_OPTIONS[key]['title']} {status}")
+    
+    @objc.IBAction
+    def moveConfigUp_(self, sender):
+        """
+        上移配置项
+        
+        按照流程图设计：调整配置选项的显示顺序
+        """
+        key = sender.representedObject()
+        if not key:
+            print(f"[ERROR] [StatusBar] 无法获取配置项 key")
+            return
+        
+        print(f"[DEBUG] [StatusBar] 上移配置项: {key}")
+        order = getattr(self, 'ops_order', list(SMART_OPS_OPTIONS.keys()))
+        
+        # 查找当前项的位置
+        try:
+            idx = order.index(key)
+            if idx == 0:
+                print(f"[DEBUG] [StatusBar] 已经是第一个，无法上移")
+                return
+            
+            # 与上一个交换位置
+            order[idx], order[idx - 1] = order[idx - 1], order[idx]
+            self.ops_order = order
+            print(f"[DEBUG] [StatusBar] 上移成功，新顺序: {order}")
+            
+            # 保存顺序配置
+            self._save_smart_ops_order(order)
+            
+            # 重新构建菜单
+            self._rebuild_menus()
+            
+            option_title = SMART_OPS_OPTIONS[key]['title']
+            print(f"[DEBUG] [StatusBar] ✓ {option_title} 已上移")
+        except ValueError:
+            print(f"[ERROR] [StatusBar] 配置项 {key} 不在顺序列表中")
+    
+    @objc.IBAction
+    def moveConfigDown_(self, sender):
+        """
+        下移配置项
+        
+        按照流程图设计：调整配置选项的显示顺序
+        """
+        key = sender.representedObject()
+        if not key:
+            print(f"[ERROR] [StatusBar] 无法获取配置项 key")
+            return
+        
+        print(f"[DEBUG] [StatusBar] 下移配置项: {key}")
+        order = getattr(self, 'ops_order', list(SMART_OPS_OPTIONS.keys()))
+        
+        # 查找当前项的位置
+        try:
+            idx = order.index(key)
+            if idx == len(order) - 1:
+                print(f"[DEBUG] [StatusBar] 已经是最后一个，无法下移")
+                return
+            
+            # 与下一个交换位置
+            order[idx], order[idx + 1] = order[idx + 1], order[idx]
+            self.ops_order = order
+            print(f"[DEBUG] [StatusBar] 下移成功，新顺序: {order}")
+            
+            # 保存顺序配置
+            self._save_smart_ops_order(order)
+            
+            # 重新构建菜单
+            self._rebuild_menus()
+            
+            option_title = SMART_OPS_OPTIONS[key]['title']
+            print(f"[DEBUG] [StatusBar] ✓ {option_title} 已下移")
+        except ValueError:
+            print(f"[ERROR] [StatusBar] 配置项 {key} 不在顺序列表中")
+    
+    def _rebuild_menus(self):
+        """
+        重新构建菜单（配置顺序变化后调用）
+        """
+        print("[DEBUG] [StatusBar] 重新构建菜单...")
+        
+        # 重新构建两个子菜单
         self.smart_ops_menu = self._build_smart_ops_menu()
         self.config_menu = self._build_config_menu()
         
@@ -496,8 +694,7 @@ class StatusBarIcon(NSObject):
                 item.setSubmenu_(self.config_menu)
                 print("[DEBUG] [StatusBar] ✓ 配置选项子菜单已更新")
         
-        status = "已启用" if new_state else "已禁用"
-        print(f"[DEBUG] [StatusBar] ✓ {SMART_OPS_OPTIONS[key]['title']} {status}")
+        print("[DEBUG] [StatusBar] ✓ 菜单重建完成")
     
     def show_smart_operations_menu(self, files):
         """
