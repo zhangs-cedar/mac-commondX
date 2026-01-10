@@ -206,6 +206,25 @@ class LicenseManager:
         print(f"[DEBUG] [License] ✓ 试用期已延长7天，剩余 {rem} 天")
         return True
     
+    def extend_trial_unlimited(self) -> bool:
+        """
+        延长试用期7天（无限制，每次都可以延长）
+        
+        用于访问官网续期功能，不检查时间间隔限制
+        
+        Returns:
+            bool: 总是返回 True（延长成功）
+        """
+        # 延长试用期：将 trial_start 向前推7天
+        self.trial_start -= EXTEND_DAYS * DAY_SECS
+        self._data['trial_start'] = self.trial_start
+        self._data['last_website_extend_time'] = time.time()
+        _save(self._data)
+        
+        rem = self.remaining_days()
+        print(f"[DEBUG] [License] ✓ 访问官网续期成功，试用期已延长7天，剩余 {rem} 天")
+        return True
+    
     def get_status(self) -> tuple:
         """
         获取许可证状态

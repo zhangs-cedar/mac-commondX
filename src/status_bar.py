@@ -545,28 +545,20 @@ class StatusBarIcon(NSObject):
     
     @objc.IBAction
     def visitWebsiteExtendTrial_(self, sender):
-        """访问官网续7天"""
+        """访问官网续7天（每次点击都可以续期，无限制）"""
         from AppKit import NSWorkspace, NSURL
         from .license_manager import license_manager
-        
-        # 先检查是否可以延长
-        if not license_manager.can_extend_trial():
-            self.send_notification("⏰ 无法续期", "距离上次延长不足7天，无法延长")
-            return
         
         # 打开官网
         website_url = "https://github.com/zhangs-cedar/mac-commondX"
         NSWorkspace.sharedWorkspace().openURL_(NSURL.URLWithString_(website_url))
         
-        # 延长试用期7天
-        success = license_manager.extend_trial()
-        if success:
-            rem = license_manager.remaining_days()
-            self.send_notification("✅ 续期成功", f"已访问官网，试用期已延长7天，剩余 {rem} 天")
-            # 刷新菜单（更新许可证状态显示）
-            self.setup_menu()
-        else:
-            self.send_notification("❌ 续期失败", "无法延长试用期")
+        # 延长试用期7天（无限制，每次都可以续期）
+        license_manager.extend_trial_unlimited()
+        rem = license_manager.remaining_days()
+        self.send_notification("✅ 续期成功", f"已访问官网，试用期已延长7天，剩余 {rem} 天")
+        # 刷新菜单（更新许可证状态显示）
+        self.setup_menu()
          
     @objc.IBAction
     def openBuyPage_(self, sender):
