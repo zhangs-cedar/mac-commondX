@@ -8,7 +8,8 @@ from Foundation import NSObject, NSTimer
 from AppKit import (
     NSStatusBar, NSMenu, NSMenuItem, NSImage, NSColor, NSApplication,
     NSSize, NSRect, NSPoint, NSBezierPath, NSAffineTransform,
-    NSUserNotificationCenter, NSUserNotification, NSButton, NSStackView, NSAlert, NSApp
+    NSUserNotificationCenter, NSUserNotification, NSButton, NSStackView, NSAlert, NSApp,
+    NSMenuDelegate
 )
 from cedar.utils import print
 
@@ -38,7 +39,7 @@ def _add_menu_item(menu, target, title, action=None, key="", enabled=True):
     return item
 
 
-class StatusBarIcon(NSObject):
+class StatusBarIcon(NSObject, NSMenuDelegate):
     """状态栏图标"""
     
     def initWithCutManager_(self, cut_manager):
@@ -51,6 +52,8 @@ class StatusBarIcon(NSObject):
             self.cached_files = []  # 缓存上次获取的文件列表
             self.enabled_ops = self._load_smart_ops_config()  # 加载配置
             self.ops_order = self._load_smart_ops_order()  # 加载顺序配置
+            self._config_menu_should_stay_open = False  # 配置菜单是否应该保持打开
+            self._config_menu_reopen_timer = None  # 菜单重新显示的定时器
             self.update_icon(0)
             self.setup_menu()
             cut_manager.on_state_change = self.on_cut_state_change
@@ -369,6 +372,7 @@ class StatusBarIcon(NSObject):
         _add_menu_item(menu, self, "退出", "quit:", "q")
         
         self.menu = menu
+        menu.setDelegate_(self)  # 设置菜单委托，用于拦截关闭事件
         self.status_item.setMenu_(menu)
         print("[DEBUG] [StatusBar] ✓ 菜单设置完成")
     
@@ -632,6 +636,12 @@ class StatusBarIcon(NSObject):
             # 重新构建菜单
             self._rebuild_menus()
             
+            # 设置标志位，保持菜单打开
+            self._config_menu_should_stay_open = True
+            
+            # 延迟重新显示菜单
+            self._reopen_config_menu_after_delay()
+            
             option_title = SMART_OPS_OPTIONS[key]['title']
             print(f"[DEBUG] [StatusBar] ✓ {option_title} 已上移")
         except ValueError:
@@ -670,6 +680,12 @@ class StatusBarIcon(NSObject):
             # 重新构建菜单
             self._rebuild_menus()
             
+            # 设置标志位，保持菜单打开
+            self._config_menu_should_stay_open = True
+            
+            # 延迟重新显示菜单
+            self._reopen_config_menu_after_delay()
+            
             option_title = SMART_OPS_OPTIONS[key]['title']
             print(f"[DEBUG] [StatusBar] ✓ {option_title} 已下移")
         except ValueError:
@@ -695,6 +711,76 @@ class StatusBarIcon(NSObject):
                 print("[DEBUG] [StatusBar] ✓ 配置选项子菜单已更新")
         
         print("[DEBUG] [StatusBar] ✓ 菜单重建完成")
+    
+    def menuWillClose_(self, menu):
+        """
+        菜单即将关闭时调用（NSMenuDelegate 协议）
+        
+        如果配置菜单应该保持打开，则重新显示菜单
+        """
+        # 检查是否是配置子菜单或主菜单关闭
+        is_config_menu = (menu == self.config_menu)
+        is_main_menu = (menu == self.menu)
+        
+        if self._config_menu_should_stay_open and (is_config_menu or is_main_menu):
+            print("[DEBUG] [StatusBar] 检测到配置菜单应该保持打开，准备重新显示")
+            self._config_menu_should_stay_open = False
+            # 延迟重新显示，避免立即关闭
+            self._reopen_config_menu_after_delay()
+    
+    def _reopen_config_menu_after_delay(self):
+        """
+        延迟重新显示配置菜单
+        
+        使用定时器延迟一小段时间后重新显示菜单，确保菜单已关闭
+        """
+        # 取消之前的定时器
+        if self._config_menu_reopen_timer:
+            self._config_menu_reopen_timer.invalidate()
+        
+        # 延迟 0.1 秒后重新显示菜单
+        self._config_menu_reopen_timer = NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+            0.1, self, "_reopen_config_menu:", None, False
+        )
+        print("[DEBUG] [StatusBar] 已设置菜单重新显示定时器（0.1秒后）")
+    
+    def _reopen_config_menu_(self, timer):
+        """
+        重新显示配置菜单
+        
+        在配置菜单关闭后，重新显示更新后的菜单
+        显示主菜单并自动展开配置选项子菜单
+        """
+        print("[DEBUG] [StatusBar] 重新显示配置菜单...")
+        
+        # 获取状态栏按钮
+        button = self.status_item.button()
+        if not button:
+            print("[ERROR] [StatusBar] 无法获取状态栏按钮，菜单重新显示失败")
+            return
+        
+        # 查找配置选项菜单项
+        config_item = None
+        for item in self.menu.itemArray():
+            if item.title() == "配置选项":
+                config_item = item
+                break
+        
+        if not config_item:
+            print("[ERROR] [StatusBar] 未找到配置选项菜单项")
+            return
+        
+        # 获取按钮位置
+        frame = button.frame()
+        point = NSPoint(frame.origin.x, frame.origin.y - frame.size.height)
+        
+        # 显示主菜单，定位到配置选项菜单项
+        # popUpMenuPositioningItem 会自动展开子菜单（如果菜单项有子菜单）
+        self.menu.popUpMenuPositioningItem_atLocation_inView_(
+            config_item, point, button
+        )
+        
+        print("[DEBUG] [StatusBar] ✓ 配置菜单已重新显示（主菜单+配置子菜单）")
     
     def show_smart_operations_menu(self, files):
         """
