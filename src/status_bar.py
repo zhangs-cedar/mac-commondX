@@ -316,6 +316,8 @@ class StatusBarIcon(NSObject):
         
         # 【步骤 1】许可信息
         print(f"[DEBUG] [StatusBar] 添加许可信息区域 - status={status}")
+        from .license_manager import license_manager
+        
         # 显示许可证状态（激活码激活延长1年，显示剩余天数）
         if status == "trial":
             title = f"试用期 (剩余 {remaining} 天)"
@@ -325,6 +327,10 @@ class StatusBarIcon(NSObject):
             # 已过期
             _add_menu_item(menu, self, "⚠ 试用期已结束", enabled=False)
             _add_menu_item(menu, self, "激活 / 购买...", "showActivationInput:")
+        
+        # 如果可以延长试用期，在许可信息区域显示延长选项
+        if license_manager.can_extend_trial():
+            _add_menu_item(menu, self, "延长试用期（7天）", "extendTrial:")
 
         menu.addItem_(NSMenuItem.separatorItem())
         
@@ -372,10 +378,6 @@ class StatusBarIcon(NSObject):
         # 【步骤 6】关于和退出
         print("[DEBUG] [StatusBar] 添加关于和退出...")
         _add_menu_item(menu, self, "关于", "showAbout:")
-        # 如果可以延长试用期，显示延长选项
-        from .license_manager import license_manager
-        if license_manager.can_extend_trial():
-            _add_menu_item(menu, self, "延长试用期（7天）", "extendTrial:")
         _add_menu_item(menu, self, "退出", "quit:", "q")
         
         self.menu = menu
@@ -983,12 +985,6 @@ class StatusBarIcon(NSObject):
         website_btn = alert.addButtonWithTitle_("访问官网")
         website_btn.setKeyEquivalent_("")
         
-        # 如果可以延长，添加延长按钮
-        has_extend_btn = license_manager.can_extend_trial()
-        if has_extend_btn:
-            extend_btn = alert.addButtonWithTitle_("延长试用期（7天）")
-            extend_btn.setKeyEquivalent_("")
-        
         # 添加关闭按钮
         alert.addButtonWithTitle_("关闭")
         
@@ -996,21 +992,11 @@ class StatusBarIcon(NSObject):
         response = alert.runModal()
         
         # 处理按钮点击
-        # NSAlertFirstButtonReturn = 1000, NSAlertSecondButtonReturn = 1001, NSAlertThirdButtonReturn = 1002
-        if has_extend_btn:
-            # 有延长按钮的情况：第一个是访问官网，第二个是延长试用期，第三个是关闭
-            if response == 1000:  # 访问官网
-                website_url = "https://github.com/zhangs-cedar/mac-commondX"
-                NSWorkspace.sharedWorkspace().openURL_(NSURL.URLWithString_(website_url))
-                print(f"[DEBUG] [StatusBar] 打开官网: {website_url}")
-            elif response == 1001:  # 延长试用期
-                self.extendTrial_(None)
-        else:
-            # 没有延长按钮的情况：第一个是访问官网，第二个是关闭
-            if response == 1000:  # 访问官网
-                website_url = "https://github.com/zhangs-cedar/mac-commondX"
-                NSWorkspace.sharedWorkspace().openURL_(NSURL.URLWithString_(website_url))
-                print(f"[DEBUG] [StatusBar] 打开官网: {website_url}")
+        # NSAlertFirstButtonReturn = 1000, NSAlertSecondButtonReturn = 1001
+        if response == 1000:  # 访问官网
+            website_url = "https://github.com/zhangs-cedar/mac-commondX"
+            NSWorkspace.sharedWorkspace().openURL_(NSURL.URLWithString_(website_url))
+            print(f"[DEBUG] [StatusBar] 打开官网: {website_url}")
     
     @objc.IBAction
     def extendTrial_(self, sender):
