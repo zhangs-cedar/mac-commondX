@@ -271,9 +271,19 @@ class StatusBarIcon(NSObject):
         menu.addItem_(smart_ops_item)
         print("[DEBUG] [StatusBar] ✓ 文件智能操作子菜单已添加")
         
+        # 【步骤 4】配置选项子菜单（按照流程图：与文件智能操作平级）
+        print("[DEBUG] [StatusBar] 构建配置选项子菜单...")
+        self.config_menu = self._build_config_menu()
+        
+        # 主菜单项：使用简洁的标题
+        config_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("配置选项", None, "")
+        config_item.setSubmenu_(self.config_menu)
+        menu.addItem_(config_item)
+        print("[DEBUG] [StatusBar] ✓ 配置选项子菜单已添加")
+        
         menu.addItem_(NSMenuItem.separatorItem())
         
-        # 【步骤 4】系统设置
+        # 【步骤 5】系统设置
         print("[DEBUG] [StatusBar] 添加系统设置区域...")
         perm_ok = check_accessibility()
         if perm_ok:
@@ -287,7 +297,7 @@ class StatusBarIcon(NSObject):
         
         menu.addItem_(NSMenuItem.separatorItem())
         
-        # 【步骤 5】关于和退出
+        # 【步骤 6】关于和退出
         print("[DEBUG] [StatusBar] 添加关于和退出...")
         _add_menu_item(menu, self, "关于", "showAbout:")
         _add_menu_item(menu, self, "退出", "quit:", "q")
@@ -303,7 +313,6 @@ class StatusBarIcon(NSObject):
         按照流程图设计：
         1. 说明项
         2. 操作选项（根据配置显示）
-        3. 配置选项（复选框）
         """
         print("[DEBUG] [StatusBar] 构建智能操作菜单...")
         menu = NSMenu.alloc().init()
@@ -322,25 +331,39 @@ class StatusBarIcon(NSObject):
                 print(f"[DEBUG] [StatusBar] 已添加操作选项: {option['title']}")
         print(f"[DEBUG] [StatusBar] 操作选项构建完成，共 {enabled_count} 个")
         
-        # 【步骤 3】添加配置选项（多选菜单）
-        menu.addItem_(NSMenuItem.separatorItem())
+        print(f"[DEBUG] [StatusBar] ✓ 智能操作菜单构建完成")
+        return menu
+    
+    def _build_config_menu(self):
+        """
+        构建配置选项子菜单
+        
+        按照流程图设计：
+        1. 配置标题（禁用）
+        2. 配置选项（复选框，可点击）
+        """
+        print("[DEBUG] [StatusBar] 构建配置选项菜单...")
+        menu = NSMenu.alloc().init()
+        
+        # 【步骤 1】添加配置标题（禁用状态）
         _add_menu_item(menu, self, "⚙️ 配置显示项", enabled=False)
         print("[DEBUG] [StatusBar] 已添加配置标题")
         
-        # 为每个选项添加复选框菜单项
+        # 【步骤 2】为每个选项添加复选框菜单项
         for key, option in SMART_OPS_OPTIONS.items():
             item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
-                f"  {option['title']}", "toggleSmartOp:", ""
+                option['title'], "toggleSmartOp:", ""
             )
             item.setTarget_(self)
             item.setRepresentedObject_(key)
             # 设置状态：1=选中（NSOnState），0=未选中（NSOffState）
+            # NSMenuItem 会自动显示复选框，无需在标题中添加 ☑
             is_enabled = self.enabled_ops.get(key, True)
             item.setState_(1 if is_enabled else 0)
             menu.addItem_(item)
             print(f"[DEBUG] [StatusBar] 已添加配置项: {option['title']} (状态={'启用' if is_enabled else '禁用'})")
         
-        print(f"[DEBUG] [StatusBar] ✓ 智能操作菜单构建完成")
+        print(f"[DEBUG] [StatusBar] ✓ 配置选项菜单构建完成")
         return menu
     
     @objc.IBAction
@@ -459,16 +482,19 @@ class StatusBarIcon(NSObject):
         # 【步骤 3】更新菜单项状态
         sender.setState_(1 if new_state else 0)
         
-        # 【步骤 4】重新构建菜单（更新显示的操作项）
-        print("[DEBUG] [StatusBar] 重新构建菜单以更新显示的操作项...")
+        # 【步骤 4】重新构建两个菜单（更新显示的操作项和配置项）
+        print("[DEBUG] [StatusBar] 重新构建菜单以更新显示的操作项和配置项...")
         self.smart_ops_menu = self._build_smart_ops_menu()
+        self.config_menu = self._build_config_menu()
         
         # 更新主菜单中的子菜单
         for item in self.menu.itemArray():
             if item.title() == "文件智能操作":
                 item.setSubmenu_(self.smart_ops_menu)
-                print("[DEBUG] [StatusBar] ✓ 主菜单中的子菜单已更新")
-                break
+                print("[DEBUG] [StatusBar] ✓ 文件智能操作子菜单已更新")
+            elif item.title() == "配置选项":
+                item.setSubmenu_(self.config_menu)
+                print("[DEBUG] [StatusBar] ✓ 配置选项子菜单已更新")
         
         status = "已启用" if new_state else "已禁用"
         print(f"[DEBUG] [StatusBar] ✓ {SMART_OPS_OPTIONS[key]['title']} {status}")
