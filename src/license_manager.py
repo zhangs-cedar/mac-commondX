@@ -131,8 +131,9 @@ class LicenseManager:
         # 保存激活码
         self._data['activation_code'] = code.strip().upper()
         
-        # 延长试用期1年：将 trial_start 向前推365天
-        self.trial_start -= ACTIVATION_DAYS * DAY_SECS
+        # 延长试用期1年：将 trial_start 向后推365天（增加 trial_start，减少已过去天数）
+        # 逻辑：trial_start 增大 → elapsed_days 减小 → remaining_days 增大
+        self.trial_start += ACTIVATION_DAYS * DAY_SECS
         self._data['trial_start'] = self.trial_start
         self._data['last_activation_time'] = time.time()
         _save(self._data)
@@ -196,8 +197,9 @@ class LicenseManager:
             print("[DEBUG] [License] 距离上次延长不足7天，无法延长")
             return False
         
-        # 延长试用期：将 trial_start 向前推7天
-        self.trial_start -= EXTEND_DAYS * DAY_SECS
+        # 延长试用期7天：将 trial_start 向后推7天（增加 trial_start，减少已过去天数）
+        # 逻辑：trial_start 增大 → elapsed_days 减小 → remaining_days 增大
+        self.trial_start += EXTEND_DAYS * DAY_SECS
         self._data['trial_start'] = self.trial_start
         self._data['last_extend_time'] = time.time()
         _save(self._data)
@@ -215,8 +217,9 @@ class LicenseManager:
         Returns:
             bool: 总是返回 True（延长成功）
         """
-        # 延长试用期：将 trial_start 向前推7天
-        self.trial_start -= EXTEND_DAYS * DAY_SECS
+        # 延长试用期7天：将 trial_start 向后推7天（增加 trial_start，减少已过去天数）
+        # 逻辑：trial_start 增大 → elapsed_days 减小 → remaining_days 增大
+        self.trial_start += EXTEND_DAYS * DAY_SECS
         self._data['trial_start'] = self.trial_start
         self._data['last_website_extend_time'] = time.time()
         _save(self._data)
