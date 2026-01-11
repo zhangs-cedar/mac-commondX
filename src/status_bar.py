@@ -525,7 +525,7 @@ class StatusBarIcon(NSObject):
         from .license_manager import license_manager
         
         # 显示简洁输入框
-        ok, code = self._show_alert("🔑 输入激活码", "请输入激活码：", True)
+        ok, code = self._show_alert("🔑 输入激活码", "", True)
         if ok and code:
             if license_manager.activate(code):
                 rem = license_manager.remaining_days()
