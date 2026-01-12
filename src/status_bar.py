@@ -1126,39 +1126,12 @@ class StatusBarIcon(NSObject):
         
         优先使用系统通知，如果失败则使用弹窗提示
         """
-        # #region agent log
-        import json
         import time
-        try:
-            with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "A",
-                    "location": "status_bar.py:send_notification",
-                    "message": "send_notification called",
-                    "data": {"title": title, "msg": msg[:50]},
-                    "timestamp": int(time.time() * 1000)
-                }) + "\n")
-        except: pass
-        # #endregion
+        print(f"[DEBUG] [StatusBar] send_notification called - location=status_bar.py:send_notification, title={title}, msg={msg[:50]}, timestamp={int(time.time() * 1000)}")
         
         center = NSUserNotificationCenter.defaultUserNotificationCenter()
         
-        # #region agent log
-        try:
-            with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "B",
-                    "location": "status_bar.py:send_notification",
-                    "message": "NSUserNotificationCenter check",
-                    "data": {"center_exists": center is not None},
-                    "timestamp": int(time.time() * 1000)
-                }) + "\n")
-        except: pass
-        # #endregion
+        print(f"[DEBUG] [StatusBar] NSUserNotificationCenter check - location=status_bar.py:send_notification, center_exists={center is not None}, timestamp={int(time.time() * 1000)}")
         
         notification_sent = False
         if center:
@@ -1169,53 +1142,14 @@ class StatusBarIcon(NSObject):
                 center.deliverNotification_(n)
                 notification_sent = True
                 
-                # #region agent log
-                try:
-                    with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
-                        f.write(json.dumps({
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "C",
-                            "location": "status_bar.py:send_notification",
-                            "message": "NSUserNotification delivered",
-                            "data": {"success": True},
-                            "timestamp": int(time.time() * 1000)
-                        }) + "\n")
-                except: pass
-                # #endregion
+                print(f"[DEBUG] [StatusBar] NSUserNotification delivered - location=status_bar.py:send_notification, success=True, timestamp={int(time.time() * 1000)}")
             except Exception as e:
-                # #region agent log
-                try:
-                    with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
-                        f.write(json.dumps({
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "D",
-                            "location": "status_bar.py:send_notification",
-                            "message": "NSUserNotification delivery failed",
-                            "data": {"error": str(e)},
-                            "timestamp": int(time.time() * 1000)
-                        }) + "\n")
-                except: pass
-                # #endregion
+                print(f"[DEBUG] [StatusBar] NSUserNotification delivery failed - location=status_bar.py:send_notification, error={str(e)}, timestamp={int(time.time() * 1000)}")
                 print(f"[ERROR] [StatusBar] 发送通知失败: {e}")
         
         # 如果系统通知失败或不可用，使用弹窗提示
         if not notification_sent:
-            # #region agent log
-            try:
-                with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
-                    f.write(json.dumps({
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "E",
-                        "location": "status_bar.py:send_notification",
-                        "message": "Falling back to alert dialog",
-                        "data": {"title": title},
-                        "timestamp": int(time.time() * 1000)
-                    }) + "\n")
-            except: pass
-            # #endregion
+            print(f"[DEBUG] [StatusBar] Falling back to alert dialog - location=status_bar.py:send_notification, title={title}, timestamp={int(time.time() * 1000)}")
             self._show_alert_dialog(title, msg)
     
     def _show_alert_dialog(self, title, msg):
