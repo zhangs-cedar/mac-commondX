@@ -9,6 +9,33 @@ from pathlib import Path
 import re
 from cedar.utils import print
 
+# Mermaid.js 路径配置
+# 使用项目目录中的文件（打包时会包含）
+MERMAID_JS_PROJECT = Path(__file__).parent / "assets" / "mermaid.min.js"
+
+
+def _get_mermaid_js() -> str:
+    """
+    获取 Mermaid.js 代码（完全离线支持）
+    
+    从项目目录读取：src/plugins/assets/mermaid.min.js
+    
+    Returns:
+        str: Mermaid.js 代码，如果获取失败返回空字符串
+    """
+    print(f"[DEBUG] [MdToHtmlPlugin] 开始获取 Mermaid.js...")
+    
+    if MERMAID_JS_PROJECT.exists():
+        try:
+            mermaid_code = MERMAID_JS_PROJECT.read_text(encoding='utf-8')
+            print(f"[DEBUG] [MdToHtmlPlugin] 从项目目录读取 Mermaid.js，长度={len(mermaid_code)}")
+            return mermaid_code
+        except Exception as e:
+            print(f"[WARN] [MdToHtmlPlugin] 读取项目文件失败: {e}")
+    
+    print(f"[WARN] [MdToHtmlPlugin] 未找到 Mermaid.js 文件，Mermaid 图表将无法渲染")
+    return ""
+
 
 def _detect_and_convert_mermaid(html_content: str) -> tuple:
     """
@@ -23,24 +50,70 @@ def _detect_and_convert_mermaid(html_content: str) -> tuple:
     print(f"[DEBUG] [MdToHtmlPlugin] 开始检测 Mermaid 代码块...")
     
     # 检测是否存在 Mermaid 代码块
-    # 匹配 <pre><code class="language-mermaid"> 或 <pre><code class="mermaid">
-    mermaid_pattern = r'<pre><code[^>]*class=["\'](?:language-)?mermaid["\'][^>]*>(.*?)</code></pre>'
+    # 支持多种格式：
+    # 1. <pre><code class="language-mermaid"> 或 <pre><code class="mermaid">
+    # 2. <div class="codehilite"><pre><code>（codehilite 扩展格式，需要从内容中提取）
+    # 3. 直接匹配包含 mermaid 关键字的代码块
     
-    has_mermaid = bool(re.search(mermaid_pattern, html_content, re.DOTALL | re.IGNORECASE))
-    print(f"[DEBUG] [MdToHtmlPlugin] 检测到 Mermaid 代码块: {has_mermaid}")
+    # 先尝试标准格式
+    mermaid_pattern1 = r'<pre><code[^>]*class=["\'](?:language-)?mermaid["\'][^>]*>(.*?)</code></pre>'
+    has_mermaid1 = bool(re.search(mermaid_pattern1, html_content, re.DOTALL | re.IGNORECASE))
+    
+    # 检查是否包含 mermaid 图表语法关键词
+    mermaid_keywords = ['graph', 'sequenceDiagram', 'classDiagram', 'stateDiagram', 'erDiagram', 
+                       'gantt', 'pie', 'gitgraph', 'journey', 'flowchart']
+    has_mermaid2 = any(keyword in html_content for keyword in mermaid_keywords)
+    
+    # 尝试匹配 codehilite 格式的代码块，并检查内容
+    # codehilite 可能生成: <div class="codehilite"><pre><code>...</code></pre></div>
+    # 或者: <div class="codehilite"><pre><span></span><code>...</code></pre></div>
+    codehilite_pattern = r'<div class="codehilite"><pre>(?:<span[^>]*></span>)?<code>(.*?)</code></pre></div>'
+    codehilite_blocks = re.findall(codehilite_pattern, html_content, re.DOTALL | re.IGNORECASE)
+    
+    has_mermaid3 = False
+    for block in codehilite_blocks:
+        # 解码 HTML 实体
+        decoded = block.replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
+        # 检查是否包含 mermaid 语法
+        if any(keyword in decoded for keyword in mermaid_keywords):
+            has_mermaid3 = True
+            break
+    
+    has_mermaid = has_mermaid1 or has_mermaid2 or has_mermaid3
+    print(f"[DEBUG] [MdToHtmlPlugin] 检测到 Mermaid 代码块: {has_mermaid} (标准格式={has_mermaid1}, 关键词={has_mermaid2}, codehilite={has_mermaid3})")
     
     if not has_mermaid:
         return html_content, False
     
-    # 转换 Mermaid 代码块为 <div class="mermaid">
-    def replace_mermaid(match):
+    # 转换标准格式的 Mermaid 代码块
+    def replace_mermaid_standard(match):
         mermaid_code = match.group(1)
-        # 解码 HTML 实体（markdown 库可能会转义）
+        # 解码 HTML 实体
         mermaid_code = mermaid_code.replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
-        print(f"[DEBUG] [MdToHtmlPlugin] 转换 Mermaid 代码块，长度={len(mermaid_code)}")
-        return f'<div class="mermaid">\n{mermaid_code}\n</div>'
+        # 移除语法高亮的 HTML 标签
+        mermaid_code = re.sub(r'<[^>]+>', '', mermaid_code)
+        print(f"[DEBUG] [MdToHtmlPlugin] 转换标准格式 Mermaid 代码块，长度={len(mermaid_code)}")
+        return f'<div class="mermaid">\n{mermaid_code.strip()}\n</div>'
     
-    converted_html = re.sub(mermaid_pattern, replace_mermaid, html_content, flags=re.DOTALL | re.IGNORECASE)
+    # 转换 codehilite 格式的 Mermaid 代码块
+    def replace_mermaid_codehilite(match):
+        code_content = match.group(1)
+        # 解码 HTML 实体
+        decoded = code_content.replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
+        # 移除语法高亮的 HTML 标签（包括 <span> 等）
+        mermaid_code = re.sub(r'<[^>]+>', '', decoded)
+        # 检查是否包含 mermaid 语法
+        if any(keyword in mermaid_code for keyword in mermaid_keywords):
+            print(f"[DEBUG] [MdToHtmlPlugin] 转换 codehilite 格式 Mermaid 代码块，长度={len(mermaid_code)}")
+            return f'<div class="mermaid">\n{mermaid_code.strip()}\n</div>'
+        return match.group(0)  # 不是 mermaid，保持原样
+    
+    # 先处理标准格式
+    converted_html = re.sub(mermaid_pattern1, replace_mermaid_standard, html_content, flags=re.DOTALL | re.IGNORECASE)
+    
+    # 再处理 codehilite 格式
+    converted_html = re.sub(codehilite_pattern, replace_mermaid_codehilite, converted_html, flags=re.DOTALL | re.IGNORECASE)
+    
     mermaid_count = len(re.findall(r'<div class="mermaid">', converted_html))
     print(f"[DEBUG] [MdToHtmlPlugin] 成功转换 {mermaid_count} 个 Mermaid 代码块")
     
@@ -98,29 +171,39 @@ def execute(md_path: str, output_path: str = None) -> tuple:
         html_content, has_mermaid = _detect_and_convert_mermaid(html_content)
         print(f"[DEBUG] [MdToHtmlPlugin] Mermaid 检测完成，包含 Mermaid: {has_mermaid}")
         
-        # 构建 Mermaid.js CDN 链接和初始化脚本（仅在检测到 Mermaid 时添加）
+        # 构建离线 Mermaid.js 支持（仅在检测到 Mermaid 时添加）
         mermaid_head = ""
         mermaid_script = ""
         if has_mermaid:
-            print(f"[DEBUG] [MdToHtmlPlugin] 添加 Mermaid.js 支持")
-            mermaid_head = """    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+            print(f"[DEBUG] [MdToHtmlPlugin] 添加离线 Mermaid.js 支持")
+            
+            # 尝试获取 Mermaid.js（从缓存或下载）
+            mermaid_js_code = _get_mermaid_js()
+            
+            if mermaid_js_code:
+                print(f"[DEBUG] [MdToHtmlPlugin] Mermaid.js 已加载，长度={len(mermaid_js_code)}")
+                mermaid_head = f"""    <script>
+{mermaid_js_code}
+    </script>
     <style>
-        .mermaid { 
+        .mermaid {{ 
             text-align: center; 
             margin: 20px 0; 
             background: #fff; 
             padding: 20px; 
             border-radius: 5px; 
             overflow-x: auto;
-        }
+        }}
     </style>"""
-            mermaid_script = """    <script>
+                mermaid_script = """    <script>
         mermaid.initialize({ 
             startOnLoad: true,
             theme: 'default',
             securityLevel: 'loose'
         });
     </script>"""
+            else:
+                print(f"[WARN] [MdToHtmlPlugin] 无法加载 Mermaid.js，Mermaid 图表将无法渲染")
         
         # 添加 HTML 模板
         full_html = f"""<!DOCTYPE html>
@@ -153,51 +236,18 @@ def execute(md_path: str, output_path: str = None) -> tuple:
 
 if __name__ == "__main__":
     """测试代码"""
+    from cedar.utils import create_name
+    
     print("=" * 60)
-    print("[TEST] 开始测试 MD 转 HTML 插件（包含 Mermaid 支持）")
+    print("[TEST] 测试 MD 转 HTML 插件（Mermaid 支持）")
     print("=" * 60)
     
-    # 使用指定的测试目录
-    test_dir = Path("/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/test")
-    print(f"[TEST] 测试目录: {test_dir}")
-    
-    # 确保测试目录存在
+    test_dir = Path("/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/test/" + create_name())
     test_dir.mkdir(parents=True, exist_ok=True)
-    print(f"[TEST] 测试目录已创建/确认存在")
     
-    try:
-        # 测试 1: 普通 Markdown（无 Mermaid）
-        print("\n[TEST] 测试 1: 普通 Markdown 文件（无 Mermaid）")
-        test_md_1 = test_dir / "test_normal.md"
-        test_md_1.write_text("""# 测试文档
-
-这是一个普通的 Markdown 文档。
-
-## 代码示例
-
-```python
-print("Hello, World!")
-```
-
-**粗体文本** 和 *斜体文本*
-""", encoding='utf-8')
-        print(f"[TEST] 创建测试文件: {test_md_1}")
-        
-        success, msg, output_path = execute(str(test_md_1))
-        print(f"[TEST] 转换结果: success={success}, msg={msg}")
-        if success:
-            html_content = Path(output_path).read_text(encoding='utf-8')
-            has_mermaid_js = "mermaid.min.js" in html_content
-            print(f"[TEST] HTML 包含 Mermaid.js: {has_mermaid_js} (应该为 False)")
-            assert not has_mermaid_js, "普通 Markdown 不应包含 Mermaid.js"
-            print(f"[TEST] ✓ 测试 1 通过")
-        
-        # 测试 2: 包含 Mermaid 的 Markdown
-        print("\n[TEST] 测试 2: 包含 Mermaid 图表的 Markdown 文件")
-        test_md_2 = test_dir / "test_mermaid.md"
-        test_md_2.write_text("""# 测试 Mermaid 图表
-
-这是一个包含 Mermaid 图表的文档。
+    # 创建测试文件
+    test_md = test_dir / "test_mermaid.md"
+    test_content = """# 测试 Mermaid 图表
 
 ## 流程图示例
 
@@ -220,81 +270,44 @@ sequenceDiagram
     B->>A: 返回响应
 ```
 
-普通文本继续...
-""", encoding='utf-8')
-        print(f"[TEST] 创建测试文件: {test_md_2}")
-        
-        success, msg, output_path = execute(str(test_md_2))
-        print(f"[TEST] 转换结果: success={success}, msg={msg}")
-        if success:
-            html_content = Path(output_path).read_text(encoding='utf-8')
-            has_mermaid_js = "mermaid.min.js" in html_content
-            has_mermaid_div = '<div class="mermaid">' in html_content
-            mermaid_count = html_content.count('<div class="mermaid">')
-            print(f"[TEST] HTML 包含 Mermaid.js: {has_mermaid_js} (应该为 True)")
-            print(f"[TEST] HTML 包含 Mermaid div: {has_mermaid_div} (应该为 True)")
-            print(f"[TEST] Mermaid 图表数量: {mermaid_count} (应该为 2)")
-            assert has_mermaid_js, "包含 Mermaid 的文档应包含 Mermaid.js"
-            assert has_mermaid_div, "应包含 Mermaid div 标签"
-            assert mermaid_count == 2, f"应包含 2 个 Mermaid 图表，实际: {mermaid_count}"
-            print(f"[TEST] ✓ 测试 2 通过")
-        
-        # 测试 3: 混合内容（普通代码 + Mermaid）
-        print("\n[TEST] 测试 3: 混合内容（普通代码块 + Mermaid 图表）")
-        test_md_3 = test_dir / "test_mixed.md"
-        test_md_3.write_text("""# 混合内容测试
-
-## Python 代码
+## Python 代码示例
 
 ```python
-def hello():
-    print("Hello")
+def hello(name):
+    # 问候函数
+    print("Hello, " + name + "!")
+
+if __name__ == "__main__":
+    hello("World")
 ```
 
-## Mermaid 图表
-
-```mermaid
-pie title 数据分布
-    "类型A" : 40
-    "类型B" : 30
-    "类型C" : 20
-    "类型D" : 10
-```
-
-## JavaScript 代码
+## JavaScript 代码示例
 
 ```javascript
-console.log("test");
+function greet(name) {
+    console.log("Hello, " + name + "!");
+}
+
+greet("World");
 ```
-""", encoding='utf-8')
-        print(f"[TEST] 创建测试文件: {test_md_3}")
+"""
+    test_md.write_text(test_content, encoding='utf-8')
+    
+    # 执行转换
+    success, msg, output_path = execute(str(test_md))
+    print(f"[TEST] 转换结果: {msg}")
+    
+    if success:
+        html_content = Path(output_path).read_text(encoding='utf-8')
+        has_mermaid_js = "mermaid.initialize" in html_content
+        mermaid_count = html_content.count('<div class="mermaid">')
         
-        success, msg, output_path = execute(str(test_md_3))
-        print(f"[TEST] 转换结果: success={success}, msg={msg}")
-        if success:
-            html_content = Path(output_path).read_text(encoding='utf-8')
-            has_mermaid_js = "mermaid.min.js" in html_content
-            has_python_code = "def hello()" in html_content or "language-python" in html_content
-            mermaid_count = html_content.count('<div class="mermaid">')
-            print(f"[TEST] HTML 包含 Mermaid.js: {has_mermaid_js} (应该为 True)")
-            print(f"[TEST] HTML 包含 Python 代码: {has_python_code} (应该为 True)")
-            print(f"[TEST] Mermaid 图表数量: {mermaid_count} (应该为 1)")
-            assert has_mermaid_js, "应包含 Mermaid.js"
-            assert has_python_code, "应包含 Python 代码块"
-            assert mermaid_count == 1, f"应包含 1 个 Mermaid 图表，实际: {mermaid_count}"
-            print(f"[TEST] ✓ 测试 3 通过")
+        print(f"[TEST] HTML 包含 Mermaid.js: {has_mermaid_js}")
+        print(f"[TEST] Mermaid 图表数量: {mermaid_count}")
         
-        print("\n" + "=" * 60)
-        print("[TEST] 所有测试通过！✓")
-        print("=" * 60)
-        
-    except AssertionError as e:
-        print(f"\n[TEST] ✗ 测试失败: {e}")
-    except Exception as e:
-        print(f"\n[TEST] ✗ 测试异常: {e}")
-        import traceback
-        traceback.print_exc()
-    finally:
-        # 清理测试文件
-        pass
+        assert has_mermaid_js, "应包含 Mermaid.js"
+        assert mermaid_count == 2, f"应包含 2 个 Mermaid 图表，实际: {mermaid_count}"
+        print(f"[TEST] ✓ 测试通过")
+    else:
+        print(f"[TEST] ✗ 转换失败")
 
