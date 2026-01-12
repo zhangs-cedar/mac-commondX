@@ -13,6 +13,10 @@ from cedar.utils import print
 # 使用项目目录中的文件（打包时会包含）
 MERMAID_JS_PROJECT = Path(__file__).parent / "assets" / "mermaid.min.js"
 
+# KaTeX 路径配置（LaTeX 公式渲染）
+KATEX_JS_PROJECT = Path(__file__).parent / "assets" / "katex.min.js"
+KATEX_CSS_PROJECT = Path(__file__).parent / "assets" / "katex.min.css"
+
 
 def _get_mermaid_js() -> str:
     """
@@ -35,6 +39,121 @@ def _get_mermaid_js() -> str:
     
     print(f"[WARN] [MdToHtmlPlugin] 未找到 Mermaid.js 文件，Mermaid 图表将无法渲染")
     return ""
+
+
+def _get_katex() -> tuple:
+    """
+    获取 KaTeX 代码和 CSS（完全离线支持）
+    
+    从项目目录读取：src/plugins/assets/katex.min.js 和 katex.min.css
+    
+    Returns:
+        tuple: (katex_js: str, katex_css: str)，如果获取失败返回空字符串
+    """
+    print(f"[DEBUG] [MdToHtmlPlugin] 开始获取 KaTeX...")
+    
+    katex_js = ""
+    katex_css = ""
+    
+    if KATEX_JS_PROJECT.exists():
+        try:
+            katex_js = KATEX_JS_PROJECT.read_text(encoding='utf-8')
+            print(f"[DEBUG] [MdToHtmlPlugin] 从项目目录读取 KaTeX.js，长度={len(katex_js)}")
+        except Exception as e:
+            print(f"[WARN] [MdToHtmlPlugin] 读取 KaTeX.js 失败: {e}")
+    
+    if KATEX_CSS_PROJECT.exists():
+        try:
+            katex_css = KATEX_CSS_PROJECT.read_text(encoding='utf-8')
+            print(f"[DEBUG] [MdToHtmlPlugin] 从项目目录读取 KaTeX.css，长度={len(katex_css)}")
+        except Exception as e:
+            print(f"[WARN] [MdToHtmlPlugin] 读取 KaTeX.css 失败: {e}")
+    
+    if not katex_js or not katex_css:
+        print(f"[WARN] [MdToHtmlPlugin] 未找到 KaTeX 文件，LaTeX 公式将无法渲染")
+    
+    return katex_js, katex_css
+
+
+def _detect_latex(md_content: str) -> bool:
+    """
+    检测 Markdown 内容中是否包含 LaTeX 公式
+    
+    Args:
+        md_content: Markdown 原始内容
+        
+    Returns:
+        bool: 是否包含 LaTeX 公式
+    """
+    # 检测块级公式 $$...$$
+    block_pattern = r'\$\$[^$]+\$\$'
+    has_block = bool(re.search(block_pattern, md_content, re.DOTALL))
+    
+    # 检测行内公式 $...$（简单检测，不排除代码块）
+    # 注意：代码块中的 $ 会在后续处理中被忽略
+    inline_pattern = r'[^`]\$[^$\n]+\$[^`]'
+    has_inline = bool(re.search(inline_pattern, md_content))
+    
+    return has_inline or has_block
+
+
+def _convert_latex_in_html(html_content: str) -> str:
+    """
+    在 HTML 内容中转换 LaTeX 公式为 KaTeX 可渲染的标记
+    
+    Args:
+        html_content: HTML 内容
+        
+    Returns:
+        str: 转换后的 HTML 内容
+    """
+    # 处理块级公式 $$...$$（需要转义处理）
+    def replace_block(match):
+        formula = match.group(1)
+        # 解码可能的 HTML 实体
+        formula = formula.replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
+        # 移除可能的 HTML 标签
+        formula = re.sub(r'<[^>]+>', '', formula)
+        return f'<div class="katex-block" data-formula="{formula.strip()}"></div>'
+    
+    # 匹配块级公式 $$...$$（可能被转义）
+    block_pattern = r'\$\$([^$]+)\$\$'
+    html_content = re.sub(block_pattern, replace_block, html_content, flags=re.DOTALL)
+    
+    # 处理行内公式 $...$（排除已处理的块级公式）
+    def replace_inline(match):
+        formula = match.group(1)
+        # 解码可能的 HTML 实体
+        formula = formula.replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
+        # 移除可能的 HTML 标签
+        formula = re.sub(r'<[^>]+>', '', formula)
+        # 排除块级公式
+        if formula.strip().startswith('$$') or formula.strip().endswith('$$'):
+            return match.group(0)
+        return f'<span class="katex-inline" data-formula="{formula.strip()}"></span>'
+    
+    # 匹配行内公式 $...$（修复：移除可变宽度 lookbehind，改用简单模式）
+    # 先标记已处理的块级公式区域，避免重复处理
+    # 使用临时标记替换 katex-block 标签，处理完行内公式后再恢复
+    temp_marker = "___KATEX_BLOCK_TEMP___"
+    katex_block_pattern = r'<div class="katex-block"[^>]*></div>'
+    katex_blocks = []
+    
+    def save_katex_block(match):
+        katex_blocks.append(match.group(0))
+        return f"{temp_marker}{len(katex_blocks)-1}{temp_marker}"
+    
+    html_content = re.sub(katex_block_pattern, save_katex_block, html_content)
+    
+    # 使用简单的行内公式模式（不包含可变宽度 lookbehind）
+    inline_pattern = r'\$([^$\n<]+)\$'
+    html_content = re.sub(inline_pattern, replace_inline, html_content)
+    
+    # 恢复 katex-block 标记
+    for i, block in enumerate(katex_blocks):
+        html_content = html_content.replace(f"{temp_marker}{i}{temp_marker}", block)
+    
+    return html_content
 
 
 def _detect_and_convert_mermaid(html_content: str) -> tuple:
@@ -156,6 +275,10 @@ def execute(md_path: str, output_path: str = None) -> tuple:
         md_content = md_path.read_text(encoding='utf-8')
         print(f"[DEBUG] [MdToHtmlPlugin] 读取 Markdown 内容，长度={len(md_content)}")
         
+        # 检测 LaTeX 公式（在转换前检测）
+        has_latex = _detect_latex(md_content)
+        print(f"[DEBUG] [MdToHtmlPlugin] LaTeX 检测完成，包含 LaTeX: {has_latex}")
+        
         # 尝试使用 markdown 库
         try:
             import markdown
@@ -166,6 +289,11 @@ def execute(md_path: str, output_path: str = None) -> tuple:
             # 如果没有 markdown 库，使用简单的转换
             print(f"[DEBUG] [MdToHtmlPlugin] markdown 库未安装，使用简单转换")
             html_content = f"<pre>{md_content}</pre>"
+        
+        # 如果包含 LaTeX，转换公式标记
+        if has_latex:
+            html_content = _convert_latex_in_html(html_content)
+            print(f"[DEBUG] [MdToHtmlPlugin] LaTeX 公式已转换为 HTML 标记")
         
         # 检测并转换 Mermaid 代码块
         html_content, has_mermaid = _detect_and_convert_mermaid(html_content)
@@ -205,6 +333,51 @@ def execute(md_path: str, output_path: str = None) -> tuple:
             else:
                 print(f"[WARN] [MdToHtmlPlugin] 无法加载 Mermaid.js，Mermaid 图表将无法渲染")
         
+        # 构建离线 KaTeX 支持（仅在检测到 LaTeX 时添加）
+        katex_head = ""
+        katex_script = ""
+        if has_latex:
+            print(f"[DEBUG] [MdToHtmlPlugin] 添加离线 KaTeX 支持")
+            katex_js, katex_css = _get_katex()
+            
+            if katex_js and katex_css:
+                print(f"[DEBUG] [MdToHtmlPlugin] KaTeX 已加载，JS长度={len(katex_js)}, CSS长度={len(katex_css)}")
+                katex_head = f"""    <style>
+{katex_css}
+    </style>
+    <script>
+{katex_js}
+    </script>"""
+                katex_script = """    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            // 渲染行内公式
+            const inlineElements = document.querySelectorAll('.katex-inline');
+            inlineElements.forEach(function(el) {
+                const formula = el.getAttribute('data-formula');
+                try {
+                    const rendered = katex.renderToString(formula, { throwOnError: false, displayMode: false });
+                    el.outerHTML = rendered;
+                } catch (e) {
+                    console.warn('KaTeX 渲染失败:', formula, e);
+                }
+            });
+            
+            // 渲染块级公式
+            const blockElements = document.querySelectorAll('.katex-block');
+            blockElements.forEach(function(el) {
+                const formula = el.getAttribute('data-formula');
+                try {
+                    const rendered = katex.renderToString(formula, { throwOnError: false, displayMode: true });
+                    el.outerHTML = '<div style="text-align: center; margin: 20px 0; overflow-x: auto;">' + rendered + '</div>';
+                } catch (e) {
+                    console.warn('KaTeX 渲染失败:', formula, e);
+                }
+            });
+        });
+    </script>"""
+            else:
+                print(f"[WARN] [MdToHtmlPlugin] 无法加载 KaTeX，LaTeX 公式将无法渲染")
+        
         # 添加 HTML 模板
         full_html = f"""<!DOCTYPE html>
 <html>
@@ -217,10 +390,12 @@ def execute(md_path: str, output_path: str = None) -> tuple:
         code {{ background: #f5f5f5; padding: 2px 5px; border-radius: 3px; }}
     </style>
 {mermaid_head}
+{katex_head}
 </head>
 <body>
 {html_content}
 {mermaid_script}
+{katex_script}
 </body>
 </html>"""
         
@@ -247,7 +422,7 @@ if __name__ == "__main__":
     
     # 创建测试文件
     test_md = test_dir / "test_mermaid.md"
-    test_content = """# 测试 Mermaid 图表
+    test_content = """# 测试 Mermaid 图表和 LaTeX 公式
 
 ## 流程图示例
 
@@ -270,6 +445,22 @@ sequenceDiagram
     B->>A: 返回响应
 ```
 
+## LaTeX 公式示例
+
+### 行内公式
+
+这是行内公式：$E = mc^2$，还有 $\\sum_{i=1}^{n} x_i$。
+
+### 块级公式
+
+$$
+\\int_{-\\infty}^{\\infty} e^{-x^2} dx = \\sqrt{\\pi}
+$$
+
+$$
+f(x) = \\frac{1}{\\sqrt{2\\pi\\sigma^2}} e^{-\\frac{(x-\\mu)^2}{2\\sigma^2}}
+$$
+
 ## Python 代码示例
 
 ```python
@@ -279,16 +470,6 @@ def hello(name):
 
 if __name__ == "__main__":
     hello("World")
-```
-
-## JavaScript 代码示例
-
-```javascript
-function greet(name) {
-    console.log("Hello, " + name + "!");
-}
-
-greet("World");
 ```
 """
     test_md.write_text(test_content, encoding='utf-8')
