@@ -1145,3 +1145,37 @@ class StatusBarIcon(NSObject):
         print(f"[DEBUG] [StatusBar] _show_alert_dialog() - title={title}")
         # 使用通用方法
         self._show_alert_common(title, msg, buttons=["确定"], with_input=False, alert_style=0)
+    
+    def show_kimi_result_popup(self, original_text: str, result_text: str):
+        """
+        显示 Kimi API 结果弹窗
+        
+        Args:
+            original_text: 原始文本
+            result_text: API 返回结果
+        """
+        print(f"[DEBUG] [StatusBar] show_kimi_result_popup() - 原始文本长度={len(original_text)}, 结果长度={len(result_text)}")
+        
+        # 构建消息内容
+        # 限制显示长度，避免弹窗过大
+        max_display_length = 500
+        original_display = original_text[:max_display_length] + ("..." if len(original_text) > max_display_length else "")
+        result_display = result_text[:max_display_length] + ("..." if len(result_text) > max_display_length else "")
+        
+        msg = f"原始文本：\n{original_display}\n\n结果：\n{result_display}"
+        
+        # 显示弹窗，包含"复制结果"和"关闭"按钮
+        response = self._show_alert_common(
+            "🤖 Kimi API 结果",
+            msg,
+            buttons=["复制结果", "关闭"],
+            with_input=False,
+            alert_style=0
+        )
+        
+        # 处理按钮点击
+        if response == 1000:  # 复制结果
+            from .utils import copy_to_clipboard
+            copy_to_clipboard(result_text)
+            self.send_notification("✅ 已复制", "结果已复制到剪贴板")
+            print(f"[DEBUG] [StatusBar] ✓ 结果已复制到剪贴板")

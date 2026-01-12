@@ -23,7 +23,7 @@ from .cut_manager import CutManager
 from .status_bar import StatusBarIcon
 from .license_manager import license_manager
 from .permission import check_accessibility, request_accessibility, open_accessibility_settings
-from .utils import copy_to_clipboard
+from .utils import copy_to_clipboard, get_clipboard_content
 
 
 class CommondXApp(NSObject):
@@ -34,6 +34,13 @@ class CommondXApp(NSObject):
         if self:
             self.cut_manager = self.event_tap = self.status_bar = None
             self._current_alert = None  # 当前弹窗引用
+            # Kimi API 相关变量
+            self.last_clipboard_content = None
+            self.last_copy_time = 0
+            self.COPY_INTERVAL = 5.0  # 5秒内的连续复制视为"连续"（放宽限制）
+            self.last_triggered_content = None  # 最近一次触发的内容
+            self.last_triggered_time = 0  # 最近一次触发的时间
+            self.TRIGGER_COOLDOWN = 3.0  # 触发冷却时间，避免重复触发
         return self
     
     def applicationDidFinishLaunching_(self, _):
@@ -48,6 +55,7 @@ class CommondXApp(NSObject):
         self.event_tap = EventTap(
             on_cut=self.on_cut,
             on_paste=self.on_paste,
+            on_copy=self.on_copy,
             on_license_invalid=self._on_license_invalid
         )
         self._try_start()
@@ -227,6 +235,160 @@ class CommondXApp(NSObject):
         ok, msg = self.cut_manager.paste()
         print(f"[App] 粘贴操作完成: {msg}")
         return True
+    
+    def on_copy(self):
+        """
+        ⌘+C 回调函数（全局监听）
+        
+        检测连续两次 ⌘+C 复制相同内容时，调用 Kimi API 进行翻译、解释等处理。
+        
+        触发条件：
+        1. 连续两次复制的内容相同
+        2. 时间间隔在 5 秒内（避免间隔太久）
+        3. 不在冷却时间内（3秒内不重复触发相同内容，避免快速复制时多个弹窗）
+        """
+        print("[App] on_copy() 被调用（全局监听）")
+        import time
+        import json
+        
+        # #region agent log
+        try:
+            with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"app.py:on_copy","message":"函数入口，检查初始状态","data":{"last_content_len":len(self.last_clipboard_content) if self.last_clipboard_content else 0,"last_time":self.last_copy_time,"current_time":time.time(),"time_diff":time.time()-self.last_copy_time if self.last_copy_time > 0 else None},"timestamp":int(time.time()*1000)})+'\n')
+        except: pass
+        # #endregion
+        
+        # 延迟读取，确保系统已复制到剪贴板
+        time.sleep(0.1)
+        
+        # #region agent log
+        try:
+            with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"app.py:on_copy","message":"延迟后准备读取剪贴板","data":{"delay":"0.1s"},"timestamp":int(time.time()*1000)})+'\n')
+        except: pass
+        # #endregion
+        
+        # 读取剪贴板内容
+        current_content = get_clipboard_content()
+        current_time = time.time()
+        
+        # #region agent log
+        try:
+            with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B","location":"app.py:on_copy","message":"读取剪贴板内容后","data":{"current_len":len(current_content) if current_content else 0,"current_preview":current_content[:50] if current_content else None,"last_len":len(self.last_clipboard_content) if self.last_clipboard_content else 0,"last_preview":self.last_clipboard_content[:50] if self.last_clipboard_content else None},"timestamp":int(time.time()*1000)})+'\n')
+        except: pass
+        # #endregion
+        
+        print(f"[App] 剪贴板内容长度: {len(current_content) if current_content else 0}")
+        
+        # 计算时间差
+        time_diff = current_time - self.last_copy_time if self.last_copy_time > 0 else float('inf')
+        
+        # #region agent log
+        try:
+            with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"app.py:on_copy","message":"时间间隔检查","data":{"time_diff":time_diff,"COPY_INTERVAL":self.COPY_INTERVAL,"within_interval":time_diff < self.COPY_INTERVAL},"timestamp":int(time.time()*1000)})+'\n')
+        except: pass
+        # #endregion
+        
+        # 内容比较
+        content_equal = current_content == self.last_clipboard_content if current_content and self.last_clipboard_content else False
+        
+        # #region agent log
+        try:
+            with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B","location":"app.py:on_copy","message":"内容比较结果","data":{"content_equal":content_equal,"current_repr":repr(current_content[:100]) if current_content else None,"last_repr":repr(self.last_clipboard_content[:100]) if self.last_clipboard_content else None},"timestamp":int(time.time()*1000)})+'\n')
+        except: pass
+        # #endregion
+        
+        # 检测连续两次复制相同内容
+        # 条件1：内容相同
+        # 条件2：时间间隔在合理范围内（避免间隔太久）
+        # 条件3：防重复触发（冷却时间内不重复触发相同内容）
+        time_since_last_trigger = current_time - self.last_triggered_time if self.last_triggered_time > 0 else float('inf')
+        is_same_as_last_trigger = current_content == self.last_triggered_content if current_content and self.last_triggered_content else False
+        in_cooldown = is_same_as_last_trigger and time_since_last_trigger < self.TRIGGER_COOLDOWN
+        
+        should_trigger = (current_content and 
+            content_equal and 
+            time_diff < self.COPY_INTERVAL and
+            not in_cooldown)
+        
+        # #region agent log
+        try:
+            with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run2","hypothesisId":"F","location":"app.py:on_copy","message":"防重复检查","data":{"last_triggered_content_len":len(self.last_triggered_content) if self.last_triggered_content else 0,"time_since_last_trigger":time_since_last_trigger,"is_same_as_last_trigger":is_same_as_last_trigger,"in_cooldown":in_cooldown,"TRIGGER_COOLDOWN":self.TRIGGER_COOLDOWN},"timestamp":int(time.time()*1000)})+'\n')
+        except: pass
+        # #endregion
+        
+        # #region agent log
+        try:
+            with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run2","hypothesisId":"ALL","location":"app.py:on_copy","message":"触发条件检查（含防重复）","data":{"has_content":bool(current_content),"content_equal":content_equal,"time_diff":time_diff,"within_interval":time_diff < self.COPY_INTERVAL,"in_cooldown":in_cooldown,"should_trigger":should_trigger},"timestamp":int(time.time()*1000)})+'\n')
+        except: pass
+        # #endregion
+        
+        if should_trigger:
+            print(f"[App] ✓ 检测到连续两次复制相同内容，调用 Kimi API...")
+            print(f"[App] 内容预览: {current_content[:100]}...")
+            
+            # 调用 Kimi API 插件
+            from .plugins.kimi_api_plugin import execute as kimi_execute
+            success, msg, result = kimi_execute(current_content, "translate")
+            
+            if success:
+                print(f"[App] ✓ Kimi API 调用成功，结果显示弹窗")
+                # 显示结果弹窗
+                if self.status_bar:
+                    self.status_bar.show_kimi_result_popup(current_content, result)
+                
+                # 记录触发信息，用于防重复
+                self.last_triggered_content = current_content
+                self.last_triggered_time = current_time
+                
+                # #region agent log
+                try:
+                    with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
+                        f.write(json.dumps({"sessionId":"debug-session","runId":"run2","hypothesisId":"F","location":"app.py:on_copy","message":"已触发并记录触发信息","data":{"triggered_content_len":len(current_content) if current_content else 0,"triggered_time":current_time},"timestamp":int(time.time()*1000)})+'\n')
+                except: pass
+                # #endregion
+            else:
+                print(f"[App] ✗ Kimi API 调用失败: {msg}")
+                if self.status_bar:
+                    self.status_bar.send_notification("Kimi API 调用失败", msg)
+        else:
+            print(f"[App] 非连续复制或内容不同，跳过 Kimi API 调用")
+            # #region agent log
+            try:
+                reason = "content_empty" if not current_content else (
+                    "content_different" if not content_equal else (
+                        "timeout" if time_diff >= self.COPY_INTERVAL else (
+                            "in_cooldown" if in_cooldown else "unknown"
+                        )
+                    )
+                )
+                with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"run2","hypothesisId":"ALL","location":"app.py:on_copy","message":"未触发原因（含防重复）","data":{"reason":reason},"timestamp":int(time.time()*1000)})+'\n')
+            except: pass
+            # #endregion
+        
+        # 更新记录
+        # #region agent log
+        try:
+            with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"app.py:on_copy","message":"更新记录前","data":{"old_last_content_len":len(self.last_clipboard_content) if self.last_clipboard_content else 0,"new_content_len":len(current_content) if current_content else 0},"timestamp":int(time.time()*1000)})+'\n')
+        except: pass
+        # #endregion
+        
+        self.last_clipboard_content = current_content
+        self.last_copy_time = current_time
+        
+        # #region agent log
+        try:
+            with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"app.py:on_copy","message":"更新记录后","data":{"last_content_len":len(self.last_clipboard_content) if self.last_clipboard_content else 0,"last_time":self.last_copy_time},"timestamp":int(time.time()*1000)})+'\n')
+        except: pass
+        # #endregion
     
     def applicationWillTerminate_(self, _):
         """退出"""

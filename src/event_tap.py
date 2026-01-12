@@ -27,7 +27,7 @@ from cedar.utils import print
 from .license_manager import license_manager
 
 # 键码与修饰键
-KEY_X, KEY_V = 7, 9
+KEY_X, KEY_V, KEY_C = 7, 9, 8
 CMD, SHIFT, OPT = Quartz.kCGEventFlagMaskCommand, Quartz.kCGEventFlagMaskShift, Quartz.kCGEventFlagMaskAlternate
 FINDER_ID = "com.apple.finder"
 
@@ -44,17 +44,19 @@ class EventTap:
     5. 调用 on_cut 或 on_paste
     """
     
-    def __init__(self, on_cut=None, on_paste=None, on_license_invalid=None):
+    def __init__(self, on_cut=None, on_paste=None, on_copy=None, on_license_invalid=None):
         """
         初始化事件监听器
         
         Args:
             on_cut: ⌘+X 时的回调函数
             on_paste: ⌘+V 时的回调函数
+            on_copy: ⌘+C 时的回调函数（全局监听，不限制应用）
             on_license_invalid: 许可证无效时的回调函数（用于显示激活提示）
         """
         self.on_cut = on_cut
         self.on_paste = on_paste
+        self.on_copy = on_copy
         self.on_license_invalid = on_license_invalid
         self.tap = None
         self.running = False
@@ -101,13 +103,9 @@ class EventTap:
                 print(f"[1] [EventTap] 非按键按下事件，放行 - event_type={event_type}")
                 return event
             
-            # 【步骤 2】检查是否为 ⌘+X 或 ⌘+V
+            # 【步骤 2】检查按键
             keycode = CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode)
-            print(f"[2] [EventTap] 检查按键 - keycode={keycode} (X=7, V=9)")
-            
-            if keycode not in (KEY_X, KEY_V):
-                print(f"[2] [EventTap] 不是 X 或 V 键，放行事件")
-                return event
+            print(f"[2] [EventTap] 检查按键 - keycode={keycode} (X=7, V=9, C=8)")
             
             # 检查修饰键（必须按下 ⌘，不能同时按下 Shift 或 Option）
             flags = Quartz.CGEventGetFlags(event)
@@ -120,7 +118,24 @@ class EventTap:
                 print(f"[2] [EventTap] 修饰键不符合要求，放行事件")
                 return event
             
-            print(f"[2] [EventTap] ✓ 确认为 ⌘+X 或 ⌘+V")
+            # 【步骤 2.1】处理 ⌘+C（全局监听，不限制应用，不检查许可证）
+            if keycode == KEY_C:
+                print(f"[2.1] [EventTap] ✓ 确认为 ⌘+C（全局监听）")
+                # 不吞掉事件，让系统正常复制
+                if self.on_copy:
+                    print(f"[2.1] [EventTap] 调用 on_copy 回调")
+                    try:
+                        self.on_copy()
+                    except Exception as e:
+                        print(f"[ERROR] [EventTap] on_copy 回调异常: {e}")
+                return event  # 放行事件，让系统正常处理复制
+            
+            # 【步骤 2.2】检查是否为 ⌘+X 或 ⌘+V
+            if keycode not in (KEY_X, KEY_V):
+                print(f"[2.2] [EventTap] 不是 X 或 V 键，放行事件")
+                return event
+            
+            print(f"[2.2] [EventTap] ✓ 确认为 ⌘+X 或 ⌘+V")
             
             # 【步骤 3】检查是否为 Finder 窗口
             is_finder = self._is_finder_active()

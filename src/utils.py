@@ -67,6 +67,53 @@ def copy_to_clipboard(text: str):
     print(f"[DEBUG] [Utils] ✓ 已复制到剪贴板")
 
 
+def get_clipboard_content() -> str:
+    """
+    读取剪贴板内容
+    
+    Returns:
+        str: 剪贴板文本内容，如果读取失败返回空字符串
+    """
+    print(f"[DEBUG] [Utils] 读取剪贴板内容...")
+    import json
+    import time
+    
+    # #region agent log
+    try:
+        with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
+            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"E","location":"utils.py:get_clipboard_content","message":"开始读取剪贴板","data":{"timestamp":int(time.time()*1000)},"timestamp":int(time.time()*1000)})+'\n')
+    except: pass
+    # #endregion
+    
+    try:
+        from AppKit import NSPasteboard, NSStringPboardType
+        pb = NSPasteboard.generalPasteboard()
+        content = pb.stringForType_(NSStringPboardType)
+        
+        # #region agent log
+        try:
+            with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"E","location":"utils.py:get_clipboard_content","message":"读取剪贴板后","data":{"content_len":len(content) if content else 0,"content_preview":content[:50] if content else None,"content_repr":repr(content[:100]) if content else None},"timestamp":int(time.time()*1000)})+'\n')
+        except: pass
+        # #endregion
+        
+        if content:
+            print(f"[DEBUG] [Utils] ✓ 剪贴板内容已读取，长度={len(content)}")
+            return content
+        else:
+            print(f"[DEBUG] [Utils] 剪贴板内容为空")
+            return ""
+    except Exception as e:
+        print(f"[ERROR] [Utils] 读取剪贴板失败: {e}")
+        # #region agent log
+        try:
+            with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"E","location":"utils.py:get_clipboard_content","message":"读取剪贴板异常","data":{"error":str(e)},"timestamp":int(time.time()*1000)})+'\n')
+        except: pass
+        # #endregion
+        return ""
+
+
 
 
 
