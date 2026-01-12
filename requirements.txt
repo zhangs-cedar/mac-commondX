@@ -17,6 +17,8 @@ markdown>=3.0
 weasyprint>=60.0  # PDF 转换工具（纯 Python）
 reportlab>=4.0  # PDF 生成备选工具（纯 Python）
 html2image>=2.0.0  # HTML 转图片工具（轻量级，无需完整浏览器）
+# PDF 转 Word 功能（纯 Python 实现）
+pdf2docx>=0.5.0  # PDF 转 Word（纯 Python）
 # 压缩/解压功能（纯 Python 实现）
 py7zr>=0.21.0  # 7Z 解压（纯 Python）
 rarfile>=4.0  # RAR 解压（需要系统有 unrar 工具，但通过 Python 包管理）
