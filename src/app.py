@@ -272,7 +272,6 @@ class CommondXApp(NSObject):
             return False
         print("[App] 执行粘贴（移动）操作...")
         ok, msg = self.cut_manager.paste()
-        self.status_bar.send_notification("移动完成" if ok else "移动失败", msg)
         print(f"[App] 粘贴操作完成: {msg}")
         return True
     
