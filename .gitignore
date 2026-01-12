@@ -5,3 +5,4 @@ build/
 dist/
 
 CommondX-1.0.0.dmg
+.cursor/debug.log

@@ -323,7 +323,7 @@ class StatusBarIcon(NSObject):
             alert.setAccessoryView_(field)
             print(f"[DEBUG] [StatusBar] 已添加输入框，占位符={input_placeholder}")
         
-        # 【步骤 5】设置窗口层级和强制显示在最前面
+        # 【步骤 5】设置窗口层级（确保显示在最前面，但不影响默认居中位置）
         window = alert.window()
         if window:
             # 设置窗口层级为浮在最前面
@@ -332,16 +332,14 @@ class StatusBarIcon(NSObject):
             collection_behavior = (NSWindowCollectionBehaviorCanJoinAllSpaces | 
                                   NSWindowCollectionBehaviorFullScreenAuxiliary)
             window.setCollectionBehavior_(collection_behavior)
-            # 强制显示在最前面
-            window.orderFrontRegardless()
-            print("[DEBUG] [StatusBar] 窗口已设置为显示在最前面")
+            print("[DEBUG] [StatusBar] 窗口层级已设置（显示在最前面）")
             
-            # 如果有输入框，设置为第一响应者
+            # 如果有输入框，设置为第一响应者（在 runModal 之前设置）
             if with_input and field:
                 window.makeFirstResponder_(field)
         
-        # 【步骤 6】显示弹窗
-        print("[DEBUG] [StatusBar] 显示弹窗（模态）")
+        # 【步骤 6】显示弹窗（runModal 会自动居中显示）
+        print("[DEBUG] [StatusBar] 显示弹窗（模态，自动居中）")
         result = alert.runModal()
         print(f"[DEBUG] [StatusBar] 弹窗关闭，返回结果={result}")
         
