@@ -14,8 +14,7 @@ from AppKit import (
 )
 from cedar.utils import print
 
-from .archive_manager import compress_to_zip, decompress_archive
-from .utils import copy_to_clipboard
+from .utils import copy_to_clipboard, compress_to_zip, decompress_archive
 
 # 配置文件路径（与许可证文件分离）
 CONFIG_PATH = Path.home() / "Library/Application Support/CommondX/config.yaml"

@@ -23,8 +23,7 @@ from .cut_manager import CutManager
 from .status_bar import StatusBarIcon
 from .license_manager import license_manager
 from .permission import check_accessibility, request_accessibility, open_accessibility_settings
-from .archive_manager import compress_to_zip, decompress_archive
-from .utils import copy_to_clipboard
+from .utils import copy_to_clipboard, compress_to_zip, decompress_archive
 
 
 class CommondXApp(NSObject):
