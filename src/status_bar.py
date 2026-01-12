@@ -8,7 +8,9 @@ from Foundation import NSObject, NSTimer
 from AppKit import (
     NSStatusBar, NSMenu, NSMenuItem, NSImage, NSColor, NSApplication,
     NSSize, NSRect, NSPoint, NSBezierPath, NSAffineTransform,
-    NSUserNotificationCenter, NSUserNotification, NSButton, NSStackView, NSAlert, NSApp
+    NSUserNotificationCenter, NSUserNotification, NSButton, NSStackView, NSAlert, NSApp,
+    NSFloatingWindowLevel, NSWindowCollectionBehaviorCanJoinAllSpaces,
+    NSWindowCollectionBehaviorFullScreenAuxiliary
 )
 from cedar.utils import print
 
@@ -271,35 +273,117 @@ class StatusBarIcon(NSObject):
         self.status_item.setImage_(image)
         self.status_item.setTitle_(f" {count}" if count > 0 else "")
     
-    def _show_alert(self, title, msg, with_input=False):
-        """显示弹窗"""
-        from AppKit import NSAlert, NSTextField, NSApp
-        NSApp.setActivationPolicy_(0)
-        NSApp.activateIgnoringOtherApps_(True)
+    def _show_alert_common(self, title, msg, buttons=None, with_input=False, input_placeholder="", alert_style=0):
+        """
+        通用弹窗方法，统一处理窗口层级、强制显示等逻辑
         
+        Args:
+            title: 弹窗标题
+            msg: 弹窗消息内容
+            buttons: 按钮列表，如果为 None 则使用默认按钮 ["确定"]
+            with_input: 是否显示输入框
+            input_placeholder: 输入框占位符文本
+            alert_style: 弹窗样式（0=信息，1=警告，2=错误）
+            
+        Returns:
+            如果 with_input=True，返回 (button_index, input_value)
+            否则返回 button_index（1000=第一个按钮，1001=第二个按钮，以此类推）
+        """
+        from AppKit import NSAlert, NSTextField, NSApp
+        print(f"[DEBUG] [StatusBar] 显示弹窗 - title={title}, with_input={with_input}")
+        
+        # 【步骤 1】设置应用激活策略和激活应用
+        NSApp.setActivationPolicy_(0)  # NSApplicationActivationPolicyRegular
+        NSApp.activateIgnoringOtherApps_(True)
+        print("[DEBUG] [StatusBar] 应用已激活")
+        
+        # 【步骤 2】创建弹窗
         alert = NSAlert.alloc().init()
         alert.setMessageText_(title)
         alert.setInformativeText_(msg)
-        alert.addButtonWithTitle_("确定" if not with_input else "激活")
+        alert.setAlertStyle_(alert_style)
         
+        # 【步骤 3】添加按钮
+        if buttons is None:
+            buttons = ["确定"]
+        for btn_title in buttons:
+            alert.addButtonWithTitle_(btn_title)
+        print(f"[DEBUG] [StatusBar] 已添加 {len(buttons)} 个按钮")
+        
+        # 【步骤 4】添加输入框（如果需要）
         field = None
         if with_input:
             alert.addButtonWithTitle_("取消")
             field = NSTextField.alloc().initWithFrame_(NSRect(NSPoint(0, 0), NSSize(250, 24)))
-            field.setPlaceholderString_("激活码")
+            field.setPlaceholderString_(input_placeholder)
             field.setEditable_(True)
             field.setSelectable_(True)
             field.setBezeled_(True)
             field.setDrawsBackground_(True)
             alert.setAccessoryView_(field)
-            alert.window().makeFirstResponder_(field)
+            print(f"[DEBUG] [StatusBar] 已添加输入框，占位符={input_placeholder}")
         
+        # 【步骤 5】设置窗口层级和强制显示在最前面
+        window = alert.window()
+        if window:
+            # 设置窗口层级为浮在最前面
+            window.setLevel_(NSFloatingWindowLevel)
+            # 设置窗口集合行为
+            collection_behavior = (NSWindowCollectionBehaviorCanJoinAllSpaces | 
+                                  NSWindowCollectionBehaviorFullScreenAuxiliary)
+            window.setCollectionBehavior_(collection_behavior)
+            # 强制显示在最前面
+            window.orderFrontRegardless()
+            print("[DEBUG] [StatusBar] 窗口已设置为显示在最前面")
+            
+            # 如果有输入框，设置为第一响应者
+            if with_input and field:
+                window.makeFirstResponder_(field)
+        
+        # 【步骤 6】显示弹窗
+        print("[DEBUG] [StatusBar] 显示弹窗（模态）")
         result = alert.runModal()
-        NSApp.setActivationPolicy_(2)
+        print(f"[DEBUG] [StatusBar] 弹窗关闭，返回结果={result}")
         
+        # 【步骤 7】恢复应用激活策略
+        NSApp.setActivationPolicy_(2)  # NSApplicationActivationPolicyAccessory
+        print("[DEBUG] [StatusBar] 应用激活策略已恢复")
+        
+        # 【步骤 8】返回结果
+        if with_input and field:
+            input_value = field.stringValue().strip() if result == 1000 else ""
+            print(f"[DEBUG] [StatusBar] 输入框值={input_value}")
+            return (result == 1000, input_value)
+        # 返回按钮索引（1000=第一个按钮，1001=第二个按钮，以此类推）
+        return result
+    
+    def _show_alert(self, title, msg, with_input=False):
+        """
+        显示弹窗（激活码输入等场景）
+        
+        Args:
+            title: 弹窗标题
+            msg: 弹窗消息内容
+            with_input: 是否显示输入框
+            
+        Returns:
+            如果 with_input=True，返回 (ok, input_value)
+            否则返回 ok (bool)
+        """
+        print(f"[DEBUG] [StatusBar] _show_alert() - title={title}, with_input={with_input}")
+        
+        # 使用通用方法
         if with_input:
-            return (result == 1000, field.stringValue().strip() if result == 1000 else "")
-        return result == 1000
+            buttons = ["激活"]
+            result = self._show_alert_common(
+                title, msg, buttons=buttons, 
+                with_input=True, input_placeholder="激活码"
+            )
+            ok, input_value = result
+            return (ok, input_value)
+        else:
+            result = self._show_alert_common(title, msg, buttons=["确定"], with_input=False)
+            return result == 1000
     
     def setup_menu(self):
         """
@@ -980,9 +1064,11 @@ class StatusBarIcon(NSObject):
     
     @objc.IBAction
     def showAbout_(self, sender):
-        from AppKit import NSApp, NSWorkspace, NSURL
-        NSApp.activateIgnoringOtherApps_(True)
+        """显示关于对话框"""
+        from AppKit import NSWorkspace, NSURL
         from .license_manager import license_manager
+        
+        print("[DEBUG] [StatusBar] showAbout_() - 显示关于对话框")
         
         # 构建关于信息
         about_text = "Mac 文件剪切移动工具\n\n• ⌘+X 剪切\n• ⌘+V 移动\n\n版本: 1.0.0\n作者: Cedar 🐱\n微信: z858998813"
@@ -998,21 +1084,14 @@ class StatusBarIcon(NSObject):
             if license_manager.can_extend_trial():
                 about_text += "\n💡 可延长试用期7天"
         
-        # 显示关于对话框
-        alert = NSAlert.alloc().init()
-        alert.setMessageText_("✂️ CommondX")
-        alert.setInformativeText_(about_text)
-        alert.setAlertStyle_(0)  # NSInformationalAlertStyle
-        
-        # 添加网址链接按钮
-        website_btn = alert.addButtonWithTitle_("访问官网")
-        website_btn.setKeyEquivalent_("")
-        
-        # 添加关闭按钮
-        alert.addButtonWithTitle_("关闭")
-        
-        # 显示对话框
-        response = alert.runModal()
+        # 使用通用方法显示对话框
+        response = self._show_alert_common(
+            "✂️ CommondX", 
+            about_text, 
+            buttons=["访问官网", "关闭"],
+            with_input=False,
+            alert_style=0
+        )
         
         # 处理按钮点击
         # NSAlertFirstButtonReturn = 1000, NSAlertSecondButtonReturn = 1001
@@ -1143,68 +1222,12 @@ class StatusBarIcon(NSObject):
     
     def _show_alert_dialog(self, title, msg):
         """
-        显示弹窗提示（通用方法）
+        显示弹窗提示（简单提示，只有一个确定按钮）
         
         Args:
             title: 标题
             msg: 消息内容
         """
-        # #region agent log
-        import json
-        import time
-        try:
-            with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "F",
-                    "location": "status_bar.py:_show_alert_dialog",
-                    "message": "Showing alert dialog",
-                    "data": {"title": title, "msg": msg[:50]},
-                    "timestamp": int(time.time() * 1000)
-                }) + "\n")
-        except: pass
-        # #endregion
-        
-        from AppKit import NSAlert, NSApp
-        NSApp.setActivationPolicy_(0)
-        NSApp.activateIgnoringOtherApps_(True)
-        
-        alert = NSAlert.alloc().init()
-        alert.setMessageText_(title)
-        alert.setInformativeText_(msg)
-        alert.setAlertStyle_(0)  # NSInformationalAlertStyle
-        alert.addButtonWithTitle_("确定")
-        
-        # #region agent log
-        try:
-            with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "G",
-                    "location": "status_bar.py:_show_alert_dialog",
-                    "message": "Alert dialog created, running modal",
-                    "data": {},
-                    "timestamp": int(time.time() * 1000)
-                }) + "\n")
-        except: pass
-        # #endregion
-        
-        alert.runModal()
-        NSApp.setActivationPolicy_(2)
-        
-        # #region agent log
-        try:
-            with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "H",
-                    "location": "status_bar.py:_show_alert_dialog",
-                    "message": "Alert dialog closed",
-                    "data": {},
-                    "timestamp": int(time.time() * 1000)
-                }) + "\n")
-        except: pass
-        # #endregion
+        print(f"[DEBUG] [StatusBar] _show_alert_dialog() - title={title}")
+        # 使用通用方法
+        self._show_alert_common(title, msg, buttons=["确定"], with_input=False, alert_style=0)
