@@ -461,6 +461,10 @@ $$
 f(x) = \\frac{1}{\\sqrt{2\\pi\\sigma^2}} e^{-\\frac{(x-\\mu)^2}{2\\sigma^2}}
 $$
 
+## 图片引用示例
+
+<img src="CommondX.png" alt="CommondX Logo" width="200" height="200">
+
 ## Python 代码示例
 
 ```python
@@ -473,6 +477,16 @@ if __name__ == "__main__":
 ```
 """
     test_md.write_text(test_content, encoding='utf-8')
+    
+    # 复制图片到测试目录
+    import shutil
+    source_image = Path("/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/tools/CommondX.png")
+    if source_image.exists():
+        dest_image = test_dir / "CommondX.png"
+        shutil.copy2(source_image, dest_image)
+        print(f"[TEST] 已复制图片到测试目录: {dest_image}")
+    else:
+        print(f"[WARN] 源图片不存在: {source_image}")
     
     # 执行转换
     success, msg, output_path = execute(str(test_md))
