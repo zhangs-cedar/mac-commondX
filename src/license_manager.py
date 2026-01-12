@@ -115,8 +115,8 @@ class LicenseManager:
         """
         激活码激活：延长试用期1年
         
-        每次激活码激活时，延长试用期365天（1年）
-        可以多次激活，每次激活都会延长1年
+        每个激活码只能使用一次，不能重复激活。
+        每次激活码激活时，延长试用期365天（1年）。
         
         Args:
             code: 激活码
@@ -124,12 +124,21 @@ class LicenseManager:
         Returns:
             bool: 如果激活成功返回 True，否则返回 False
         """
+        # 1. 验证激活码格式和正确性
         if not self.verify(code):
             print("[DEBUG] [License] 激活码验证失败")
             return False
         
-        # 保存激活码
-        self._data['activation_code'] = code.strip().upper()
+        # 2. 检查激活码是否已使用过
+        normalized_code = code.strip().upper()
+        saved_code = self._data.get('activation_code', '').strip().upper()
+        
+        if saved_code and saved_code == normalized_code:
+            print(f"[DEBUG] [License] 激活码已使用过，无法重复激活 - 激活码: {normalized_code}")
+            return False
+        
+        # 3. 执行激活逻辑
+        self._data['activation_code'] = normalized_code
         
         # 延长试用期1年：将 trial_start 向后推365天（增加 trial_start，减少已过去天数）
         # 逻辑：trial_start 增大 → elapsed_days 减小 → remaining_days 增大
