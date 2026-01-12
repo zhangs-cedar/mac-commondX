@@ -208,7 +208,7 @@ class CommondXApp(NSObject):
         if self.cut_manager.has_cut_files:
             count = self.cut_manager.count
             print(f"[8] [App] 已剪切 {count} 个文件")
-            self.status_bar.send_notification("已剪切", f"{count} 个文件待移动")
+            # self.status_bar.send_notification("已剪切", f"{count} 个文件待移动")
         else:
             print("[8] [App] 无剪切文件")
         
