@@ -18,7 +18,6 @@ from .utils import copy_to_clipboard
 from .plugins.compress_plugin import execute as compress_execute
 from .plugins.decompress_plugin import execute as decompress_execute
 from .plugins.md_to_html_plugin import execute as md_to_html_execute
-from .plugins.pdf_to_word_plugin import execute as pdf_to_word_execute
 
 # 配置文件路径（与许可证文件分离）
 CONFIG_PATH = Path.home() / "Library/Application Support/CommondX/config.yaml"
@@ -28,7 +27,6 @@ SMART_OPS_OPTIONS = {
     "compress": {"title": "压缩文件", "action": "smartCompress:"},
     "decompress": {"title": "解压缩文件", "action": "smartDecompress:"},
     "md_to_html": {"title": "MD 转 HTML", "action": "smartMdToHtml:"},
-    "pdf_to_word": {"title": "PDF 转 Word", "action": "smartPdfToWord:"},
     "copy_paths": {"title": "复制文件路径", "action": "smartCopyPaths:"},
 }
 
@@ -953,23 +951,6 @@ class StatusBarIcon(NSObject):
             return all_success, "转换完成"
         
         self._execute_smart_operation("MD 转 HTML", _md_to_html)
-    
-    @objc.IBAction
-    def smartPdfToWord_(self, sender):
-        """PDF 转 Word"""
-        def _pdf_to_word(files):
-            all_success = True
-            for pdf_path in files:
-                if not pdf_path.lower().endswith('.pdf'):
-                    self.send_notification("⚠️ 跳过", f"{Path(pdf_path).name} 不是 PDF 文件")
-                    continue
-                success, msg, output_path = pdf_to_word_execute(pdf_path)
-                self.send_notification("✅ 转换成功" if success else "❌ 转换失败", msg)
-                if not success:
-                    all_success = False
-            return all_success, "转换完成"
-        
-        self._execute_smart_operation("PDF 转 Word", _pdf_to_word)
     
     @objc.IBAction
     def smartCopyPaths_(self, sender):
