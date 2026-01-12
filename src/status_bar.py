@@ -19,6 +19,7 @@ from .plugins.compress_plugin import execute as compress_execute
 from .plugins.decompress_plugin import execute as decompress_execute
 from .plugins.md_to_html_plugin import execute as md_to_html_execute
 from .plugins.md_to_pdf_plugin import execute as md_to_pdf_execute
+from .plugins.md_to_image_plugin import execute as md_to_image_execute
 
 # 配置文件路径（与许可证文件分离）
 CONFIG_PATH = Path.home() / "Library/Application Support/CommondX/config.yaml"
@@ -29,6 +30,7 @@ SMART_OPS_OPTIONS = {
     "decompress": {"title": "解压缩文件", "action": "smartDecompress:"},
     "md_to_html": {"title": "MD 转 HTML", "action": "smartMdToHtml:"},
     "md_to_pdf": {"title": "MD 转 PDF", "action": "smartMdToPdf:"},
+    "md_to_image": {"title": "MD 转图片", "action": "smartMdToImage:"},
     "copy_paths": {"title": "复制文件路径", "action": "smartCopyPaths:"},
 }
 
@@ -970,6 +972,23 @@ class StatusBarIcon(NSObject):
             return all_success, "转换完成"
         
         self._execute_smart_operation("MD 转 PDF", _md_to_pdf)
+    
+    @objc.IBAction
+    def smartMdToImage_(self, sender):
+        """MD 转图片"""
+        def _md_to_image(files):
+            all_success = True
+            for md_path in files:
+                if not md_path.lower().endswith(('.md', '.markdown')):
+                    self.send_notification("⚠️ 跳过", f"{Path(md_path).name} 不是 Markdown 文件")
+                    continue
+                success, msg, output_path = md_to_image_execute(md_path)
+                self.send_notification("✅ 转换成功" if success else "❌ 转换失败", msg)
+                if not success:
+                    all_success = False
+            return all_success, "转换完成"
+        
+        self._execute_smart_operation("MD 转图片", _md_to_image)
     
     @objc.IBAction
     def smartCopyPaths_(self, sender):
