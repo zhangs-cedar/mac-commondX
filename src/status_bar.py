@@ -14,7 +14,11 @@ from AppKit import (
 )
 from cedar.utils import print
 
-from .utils import copy_to_clipboard, compress_to_zip, decompress_archive
+from .utils import copy_to_clipboard
+from .plugins.compress_plugin import execute as compress_execute
+from .plugins.decompress_plugin import execute as decompress_execute
+from .plugins.md_to_html_plugin import execute as md_to_html_execute
+from .plugins.md_to_pdf_plugin import execute as md_to_pdf_execute
 
 # 配置文件路径（与许可证文件分离）
 CONFIG_PATH = Path.home() / "Library/Application Support/CommondX/config.yaml"
@@ -422,7 +426,7 @@ class StatusBarIcon(NSObject):
         _add_menu_item(activation_menu, self, "📋 复制机器码", "copyMachineCode:")
         
         # 访问官网续7天
-        _add_menu_item(activation_menu, self, "🌐 访问官网续7天", "visitWebsiteExtendTrial:")
+        _add_menu_item(activation_menu, self, "🌐 访问官网续7天(偷偷告诉可以无限白嫖)", "visitWebsiteExtendTrial:")
         
         activation_menu.addItem_(NSMenuItem.separatorItem())
         
@@ -913,7 +917,7 @@ class StatusBarIcon(NSObject):
     def smartCompress_(self, sender):
         """压缩文件"""
         def _compress(files):
-            success, msg, output_path = compress_to_zip(files)
+            success, msg, output_path = compress_execute(files)
             self.send_notification("✅ 压缩成功" if success else "❌ 压缩失败", msg)
             return success, msg
         
@@ -925,7 +929,7 @@ class StatusBarIcon(NSObject):
         def _decompress(files):
             all_success = True
             for archive_path in files:
-                success, msg, output_dir = decompress_archive(archive_path)
+                success, msg, output_dir = decompress_execute(archive_path)
                 self.send_notification("✅ 解压成功" if success else "❌ 解压失败", msg)
                 if not success:
                     all_success = False
@@ -937,13 +941,12 @@ class StatusBarIcon(NSObject):
     def smartMdToHtml_(self, sender):
         """MD 转 HTML"""
         def _md_to_html(files):
-            from .utils import convert_md_to_html
             all_success = True
             for md_path in files:
                 if not md_path.lower().endswith(('.md', '.markdown')):
                     self.send_notification("⚠️ 跳过", f"{Path(md_path).name} 不是 Markdown 文件")
                     continue
-                success, msg, output_path = convert_md_to_html(md_path)
+                success, msg, output_path = md_to_html_execute(md_path)
                 self.send_notification("✅ 转换成功" if success else "❌ 转换失败", msg)
                 if not success:
                     all_success = False
@@ -955,13 +958,12 @@ class StatusBarIcon(NSObject):
     def smartMdToPdf_(self, sender):
         """MD 转 PDF"""
         def _md_to_pdf(files):
-            from .utils import convert_md_to_pdf
             all_success = True
             for md_path in files:
                 if not md_path.lower().endswith(('.md', '.markdown')):
                     self.send_notification("⚠️ 跳过", f"{Path(md_path).name} 不是 Markdown 文件")
                     continue
-                success, msg, output_path = convert_md_to_pdf(md_path)
+                success, msg, output_path = md_to_pdf_execute(md_path)
                 self.send_notification("✅ 转换成功" if success else "❌ 转换失败", msg)
                 if not success:
                     all_success = False

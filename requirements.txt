@@ -14,8 +14,11 @@ pyinstaller>=6.0
 # ==================== 可选功能依赖 ====================
 # MD 转 HTML/PDF 功能（代码中有降级处理，未安装时使用简单转换）
 markdown>=3.0
-weasyprint>=60.0; platform_system != "Darwin"  # macOS 可使用系统工具
-pdfkit>=1.0  # 备选 PDF 转换工具
+weasyprint>=60.0  # PDF 转换工具（纯 Python）
+reportlab>=4.0  # PDF 生成备选工具（纯 Python）
+# 压缩/解压功能（纯 Python 实现）
+py7zr>=0.21.0  # 7Z 解压（纯 Python）
+rarfile>=4.0  # RAR 解压（需要系统有 unrar 工具，但通过 Python 包管理）
 
 # ==================== 开发工具依赖 ====================
 # 图标生成工具 (tools/generate_icons.py)

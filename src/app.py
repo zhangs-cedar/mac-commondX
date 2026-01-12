@@ -23,7 +23,7 @@ from .cut_manager import CutManager
 from .status_bar import StatusBarIcon
 from .license_manager import license_manager
 from .permission import check_accessibility, request_accessibility, open_accessibility_settings
-from .utils import copy_to_clipboard, compress_to_zip, decompress_archive
+from .utils import copy_to_clipboard
 
 
 class CommondXApp(NSObject):
@@ -212,52 +212,6 @@ class CommondXApp(NSObject):
             print("[8] [App] 无剪切文件")
         
         return True
-    
-    def _handle_file_operation(self, action, files):
-        """
-        处理文件智能操作
-        
-        Args:
-            action: 操作类型 ("copy"、"compress"、"decompress" 或 None)
-            files: 文件路径列表
-        """
-        print(f"[7.3] [App] _handle_file_operation() - action={action}, files_count={len(files) if files else 0}")
-        
-        if not action or not files:
-            print(f"[7.3] [App] 参数无效，退出 - action={action}")
-            return
-        
-        if action == "copy":
-            print("[7.3] [App] 执行复制路径操作...")
-            paths_text = "\n".join(files)
-            copy_to_clipboard(paths_text)
-            count = len(files)
-            msg = f"已复制 {count} 个文件路径" if count > 1 else "已复制文件路径"
-            self.status_bar.send_notification("✅ 已复制路径", msg)
-            print(f"[7.3] [App] ✓ 复制路径完成: {count} 个文件")
-        
-        elif action == "compress":
-            print("[7.3] [App] 执行压缩操作...")
-            success, msg, output_path = compress_to_zip(files)
-            if success:
-                self.status_bar.send_notification("✅ 压缩成功", msg)
-                print(f"[7.3] [App] ✓ 压缩成功: {msg}")
-            else:
-                self.status_bar.send_notification("❌ 压缩失败", msg)
-                print(f"[7.3] [App] ✗ 压缩失败: {msg}")
-        
-        elif action == "decompress":
-            print("[7.3] [App] 执行解压操作...")
-            for archive_path in files:
-                success, msg, output_dir = decompress_archive(archive_path)
-                if success:
-                    self.status_bar.send_notification("✅ 解压成功", msg)
-                    print(f"[7.3] [App] ✓ 解压成功: {msg}")
-                else:
-                    self.status_bar.send_notification("❌ 解压失败", msg)
-                    print(f"[7.3] [App] ✗ 解压失败: {msg}")
-        else:
-            print(f"[7.3] [App] 未知操作类型: {action}")
     
     def on_paste(self):
         """
