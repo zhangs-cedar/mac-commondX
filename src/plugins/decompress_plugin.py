@@ -2,7 +2,7 @@
 """
 解压插件
 
-解压各种压缩文件格式（ZIP、TAR、GZ、BZ2、RAR、7Z），使用纯 Python 实现。
+解压 Python 标准库支持的压缩文件格式（ZIP、TAR、GZ、BZ2）。
 """
 
 import zipfile
@@ -46,16 +46,6 @@ def _detect_archive_type(archive_path: str) -> str:
         if header[:2] == b'\x1f\x8b':
             print(f"[DEBUG] [DecompressPlugin] 检测到 GZ 文件")
             return 'gz'
-        
-        # RAR 文件头：Rar!
-        if header == b'Rar!':
-            print(f"[DEBUG] [DecompressPlugin] 检测到 RAR 文件")
-            return 'rar'
-        
-        # 7Z 文件头：7z\xbc\xaf
-        if header[:4] == b'7z\xbc\xaf':
-            print(f"[DEBUG] [DecompressPlugin] 检测到 7Z 文件")
-            return '7z'
     except Exception as e:
         print(f"[ERROR] [DecompressPlugin] 读取文件头失败: {e}")
     
@@ -67,53 +57,11 @@ def _detect_archive_type(archive_path: str) -> str:
         return 'tar'
     elif ext in ['.gz', '.tar.gz']:
         return 'gz'
-    elif ext == '.rar':
-        return 'rar'
-    elif ext == '.7z':
-        return '7z'
     elif ext in ['.bz2', '.tar.bz2']:
         return 'bz2'
     
     print(f"[DEBUG] [DecompressPlugin] 无法识别压缩文件类型")
     return None
-
-
-def _decompress_rar(archive_path: Path, output_dir: Path) -> tuple:
-    """使用 rarfile 库解压 RAR"""
-    print(f"[DEBUG] [DecompressPlugin] 尝试使用 rarfile 解压 RAR 文件")
-    try:
-        import rarfile
-        print(f"[DEBUG] [DecompressPlugin] rarfile 库已导入")
-        
-        with rarfile.RarFile(archive_path) as rf:
-            rf.extractall(output_dir)
-            print(f"[DEBUG] [DecompressPlugin] ✓ RAR 解压成功")
-            return True, f"解压成功：{output_dir.name}", str(output_dir)
-    except ImportError:
-        print(f"[ERROR] [DecompressPlugin] rarfile 库未安装")
-        return False, "RAR 解压需要安装 rarfile 库（pip install rarfile）", None
-    except Exception as e:
-        print(f"[ERROR] [DecompressPlugin] RAR 解压异常: {e}")
-        return False, f"RAR 解压失败：{str(e)}", None
-
-
-def _decompress_7z(archive_path: Path, output_dir: Path) -> tuple:
-    """使用 py7zr 库解压 7Z"""
-    print(f"[DEBUG] [DecompressPlugin] 尝试使用 py7zr 解压 7Z 文件")
-    try:
-        import py7zr
-        print(f"[DEBUG] [DecompressPlugin] py7zr 库已导入")
-        
-        with py7zr.SevenZipFile(archive_path, mode='r') as archive:
-            archive.extractall(output_dir)
-            print(f"[DEBUG] [DecompressPlugin] ✓ 7Z 解压成功")
-            return True, f"解压成功：{output_dir.name}", str(output_dir)
-    except ImportError:
-        print(f"[ERROR] [DecompressPlugin] py7zr 库未安装")
-        return False, "7Z 解压需要安装 py7zr 库（pip install py7zr）", None
-    except Exception as e:
-        print(f"[ERROR] [DecompressPlugin] 7Z 解压异常: {e}")
-        return False, f"7Z 解压失败：{str(e)}", None
 
 
 def execute(archive_path: str, output_dir: str = None) -> tuple:
@@ -173,19 +121,14 @@ def execute(archive_path: str, output_dir: str = None) -> tuple:
             with tarfile.open(archive_path, mode) as tar:
                 tar.extractall(output_dir)
         
-        elif archive_type == 'rar':
-            # 解压 RAR（使用 rarfile 库）
-            print(f"[DEBUG] [DecompressPlugin] 使用 rarfile 解压 RAR 文件")
-            return _decompress_rar(archive_path, output_dir)
-        
-        elif archive_type == '7z':
-            # 解压 7Z（使用 py7zr 库）
-            print(f"[DEBUG] [DecompressPlugin] 使用 py7zr 解压 7Z 文件")
-            return _decompress_7z(archive_path, output_dir)
+        elif archive_type in ['rar', '7z']:
+            # 不支持的格式
+            print(f"[ERROR] [DecompressPlugin] 不支持的压缩格式: {archive_type}")
+            return False, f"不支持的压缩格式：{archive_type}（仅支持 ZIP、TAR、GZ、BZ2）", None
         
         else:
             print(f"[ERROR] [DecompressPlugin] 不支持的压缩格式: {archive_path.suffix}")
-            return False, f"不支持的压缩格式：{archive_path.suffix}", None
+            return False, f"不支持的压缩格式：{archive_path.suffix}（仅支持 ZIP、TAR、GZ、BZ2）", None
         
         print(f"[DEBUG] [DecompressPlugin] ✓ 解压成功: {output_dir.name}")
         return True, f"解压成功：{output_dir.name}", str(output_dir)
