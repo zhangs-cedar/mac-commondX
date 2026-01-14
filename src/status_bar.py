@@ -32,7 +32,7 @@ SMART_OPS_OPTIONS = {
     "md_to_html": {"title": "MD 转 HTML", "action": "smartMdToHtml:"},
     "copy_paths": {"title": "复制文件路径", "action": "smartCopyPaths:"},
     "open_terminal": {"title": "打开终端", "action": "smartOpenTerminal:"},
-    "pdf_editor": {"title": "PDF 编辑工具", "action": "smartPdfEditor:"},
+    "pdf_editor": {"title": "PDF WORD 等在线免费转化工具", "action": "smartPdfEditor:"},
 }
 
 # 文件类型定义
@@ -43,6 +43,7 @@ FILE_TYPES = {
     "text": {"name": "文本文件", "extensions": [".txt", ".log", ".conf", ".config", ".ini", ".csv", ".tsv"]},
     "code": {"name": "代码文件", "extensions": [".py", ".js", ".ts", ".java", ".cpp", ".c", ".h", ".go", ".rs", ".swift"]},
     "pdf": {"name": "PDF 文件", "extensions": [".pdf"]},
+    "document": {"name": "Office 文档", "extensions": [".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".rtf"]},
     "other": {"name": "其他", "extensions": []}  # 其他所有文件类型
 }
 
@@ -56,7 +57,7 @@ DEFAULT_SUPPORTED_TYPES = {
     "md_to_html": ["markdown"],  # MD转HTML仅支持Markdown
     "copy_paths": ALL_FILE_TYPES,  # 复制文件路径支持所有类型
     "open_terminal": ALL_FILE_TYPES,  # 打开终端支持所有类型
-    "pdf_editor": ["pdf"],  # PDF编辑工具仅支持PDF文件
+    "pdf_editor": ["pdf", "document"],  # PDF WORD 等在线免费转化工具支持 PDF 和 Office 文档
 }
 
 
@@ -275,8 +276,8 @@ class StatusBarIcon(NSObject):
         Args:
             file_path: 文件路径
             
-        Returns:
-            str: 文件类型键（archive, markdown, image, text, code, pdf, other）
+            Returns:
+            str: 文件类型键（archive, markdown, image, text, code, pdf, document, other）
         """
         print(f"[DEBUG] [StatusBar] 检测文件类型: {file_path}")
         try:
@@ -1415,16 +1416,16 @@ class StatusBarIcon(NSObject):
     
     @objc.IBAction
     def smartPdfEditor_(self, sender):
-        """打开 PDF24 工具网页进行 PDF 编辑"""
+        """打开 PDF24 工具网页进行 PDF、Word 等文档转换"""
         def _pdf_editor(files):
             success, msg, _ = pdf_editor_execute(files)
             if success:
-                self.send_notification("✅ 已打开 PDF 工具", msg)
+                self.send_notification("✅ 已打开文档转换工具", msg)
             else:
                 self.send_notification("❌ 打开失败", msg)
             return success, msg
         
-        self._execute_smart_operation("PDF 编辑工具", _pdf_editor)
+        self._execute_smart_operation("PDF WORD 等在线免费转化工具", _pdf_editor)
     
     @objc.IBAction
     def checkPermission_(self, sender):
