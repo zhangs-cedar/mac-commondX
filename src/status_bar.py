@@ -594,8 +594,10 @@ class StatusBarIcon(NSObject):
             menu.addItem_(main_item)
             print(f"[DEBUG] [StatusBar] 已添加配置项: {option['title']} (状态={'启用' if is_enabled else '禁用'})")
         
-        # 【步骤 3】添加分隔线和编辑配置文件选项
+        # 【步骤 3】添加分隔线和 API Key 输入、编辑配置文件选项
         menu.addItem_(NSMenuItem.separatorItem())
+        _add_menu_item(menu, self, "🔑 输入 API Key", "showKimiApiKeyInput:")
+        print("[DEBUG] [StatusBar] 已添加输入 API Key 选项")
         _add_menu_item(menu, self, "📝 编辑配置文件", "openConfigFile:")
         print("[DEBUG] [StatusBar] 已添加编辑配置文件选项")
         
@@ -618,6 +620,61 @@ class StatusBarIcon(NSObject):
             else:
                 # 使用通知显示失败消息，不弹窗
                 self.send_notification("❌ 激活失败", "激活码无效，请检查后重试")
+
+    @objc.IBAction
+    def showKimiApiKeyInput_(self, sender):
+        """输入 Kimi API Key（简洁输入框）"""
+        print("[DEBUG] [StatusBar] 显示 Kimi API Key 输入框...")
+        
+        # 读取当前 API Key（如果存在）
+        current_key = None
+        try:
+            if CONFIG_PATH.exists():
+                data = yaml.safe_load(CONFIG_PATH.read_text()) or {}
+                kimi_config = data.get('kimi_api', {})
+                current_key = kimi_config.get('api_key')
+        except Exception as e:
+            print(f"[WARN] [StatusBar] 读取当前 API Key 失败: {e}")
+        
+        # 显示简洁输入框（使用通用方法，自定义按钮和占位符）
+        result = self._show_alert_common(
+            "🔑 输入 Kimi API Key", 
+            "", 
+            buttons=["保存"], 
+            with_input=True, 
+            input_placeholder="请输入 Kimi API Key"
+        )
+        ok, api_key = result
+        
+        if ok and api_key:
+            api_key = api_key.strip()
+            if not api_key:
+                self.send_notification("❌ 输入无效", "API Key 不能为空")
+                return
+            
+            # 保存 API Key 到配置文件
+            try:
+                CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+                
+                # 读取现有配置
+                data = {}
+                if CONFIG_PATH.exists():
+                    data = yaml.safe_load(CONFIG_PATH.read_text()) or {}
+                
+                # 更新 kimi_api 配置
+                if 'kimi_api' not in data:
+                    data['kimi_api'] = {}
+                data['kimi_api']['api_key'] = api_key
+                
+                # 保存配置文件
+                CONFIG_PATH.write_text(yaml.dump(data))
+                print(f"[DEBUG] [StatusBar] ✓ API Key 已保存（长度={len(api_key)}）")
+                self.send_notification("✅ 保存成功", f"Kimi API Key 已保存（长度: {len(api_key)}）")
+            except Exception as e:
+                print(f"[ERROR] [StatusBar] 保存 API Key 失败: {e}")
+                import traceback
+                print(traceback.format_exc())
+                self.send_notification("❌ 保存失败", f"无法保存 API Key: {str(e)}")
 
     @objc.IBAction
     def copyMachineCode_(self, sender):

@@ -204,7 +204,7 @@ def _get_api_key() -> str:
         if CONFIG_PATH.exists():
             data = yaml.safe_load(CONFIG_PATH.read_text()) or {}
             kimi_config = data.get('kimi_api', {})
-            api_key =  "sk-aI0vffmuixLWQGtIxqDsGjnzAnVebagCxRQJ7mjNggdT2bQv"#kimi_config.get('api_key')
+            api_key =  kimi_config.get('api_key') # "sk-aI0vffmuixLWQGtIxqDsGjnzAnVebagCxRQJ7mjNggdT2bQv"
             if api_key:
                 print(f"[DEBUG] [KimiApiPlugin] ✓ API Key 已读取（长度={len(api_key)}）")
                 return api_key
