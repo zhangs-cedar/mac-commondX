@@ -18,6 +18,7 @@ from .utils import copy_to_clipboard
 from .plugins.compress_plugin import execute as compress_execute
 from .plugins.decompress_plugin import execute as decompress_execute
 from .plugins.md_to_html_plugin import execute as md_to_html_execute
+from .plugins.open_terminal_plugin import execute as open_terminal_execute
 
 # 配置文件路径（与许可证文件分离）- 从环境变量读取
 _config_path_str = os.getenv('CONFIG_PATH')
@@ -29,6 +30,7 @@ SMART_OPS_OPTIONS = {
     "decompress": {"title": "解压缩文件", "action": "smartDecompress:"},
     "md_to_html": {"title": "MD 转 HTML", "action": "smartMdToHtml:"},
     "copy_paths": {"title": "复制文件路径", "action": "smartCopyPaths:"},
+    "open_terminal": {"title": "打开终端", "action": "smartOpenTerminal:"},
 }
 
 # 文件类型定义
@@ -50,6 +52,7 @@ DEFAULT_SUPPORTED_TYPES = {
     "decompress": ["archive"],  # 解压缩文件仅支持压缩包
     "md_to_html": ["markdown"],  # MD转HTML仅支持Markdown
     "copy_paths": ALL_FILE_TYPES,  # 复制文件路径支持所有类型
+    "open_terminal": ALL_FILE_TYPES,  # 打开终端支持所有类型
 }
 
 
@@ -361,7 +364,7 @@ class StatusBarIcon(NSObject):
             if hasattr(self, 'ops_order') and self.ops_order:
                 data['smart_ops_order'] = self.ops_order
             write_config(data, str(CONFIG_PATH))
-            print(f"[DEBUG] [StatusBar] ✓ 配置保存成功，共 {len(enabled)} 个选项")
+            print(f"[DEBUG] [StatusBar] ✓ 配置保存成功，共 {len(smart_ops)} 个选项")
         except Exception as e:
             print(f"[ERROR] [StatusBar] 保存配置失败: {e}")
     
@@ -1392,6 +1395,19 @@ class StatusBarIcon(NSObject):
             return True, msg
         
         self._execute_smart_operation("复制文件路径", _copy_paths)
+    
+    @objc.IBAction
+    def smartOpenTerminal_(self, sender):
+        """打开终端并切换到选中文件的上一级目录"""
+        def _open_terminal(files):
+            success, msg, _ = open_terminal_execute(files)
+            if success:
+                self.send_notification("✅ 已打开终端", msg)
+            else:
+                self.send_notification("❌ 打开失败", msg)
+            return success, msg
+        
+        self._execute_smart_operation("打开终端", _open_terminal)
     
     @objc.IBAction
     def checkPermission_(self, sender):
