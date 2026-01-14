@@ -14,7 +14,8 @@ EXTEND_INTERVAL_DAYS = 7  # 每7天可以延长一次
 DAY_SECS = 86400
 
 # 许可证文件路径（与配置文件分离）- 从环境变量读取
-LICENSE_PATH = Path(os.getenv('LICENSE_PATH', str(Path.home() / "Library/Application Support/CommondX/license.yaml")))
+_license_path_str = os.getenv('LICENSE_PATH')
+LICENSE_PATH = Path(_license_path_str)
 LICENSE_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 

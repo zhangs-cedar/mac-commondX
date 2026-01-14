@@ -20,7 +20,8 @@ from .plugins.decompress_plugin import execute as decompress_execute
 from .plugins.md_to_html_plugin import execute as md_to_html_execute
 
 # 配置文件路径（与许可证文件分离）- 从环境变量读取
-CONFIG_PATH = Path(os.getenv('CONFIG_PATH', str(Path.home() / "Library/Application Support/CommondX/config.yaml")))
+_config_path_str = os.getenv('CONFIG_PATH')
+CONFIG_PATH = Path(_config_path_str)
 
 # 所有可用的智能操作选项
 SMART_OPS_OPTIONS = {

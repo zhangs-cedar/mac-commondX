@@ -18,7 +18,8 @@ from pathlib import Path
 from cedar.utils import print, load_config
 
 # 配置文件路径 - 从环境变量读取
-CONFIG_PATH = Path(os.getenv('CONFIG_PATH', str(Path.home() / "Library/Application Support/CommondX/config.yaml")))
+_config_path_str = os.getenv('CONFIG_PATH')
+CONFIG_PATH = Path(_config_path_str)
 
 # Kimi API 基础 URL（Moonshot API）
 KIMI_API_BASE_URL = "https://api.moonshot.cn/v1/chat/completions"

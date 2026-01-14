@@ -9,9 +9,13 @@ from pathlib import Path
 from cedar.utils import print
 
 APP_ID = "com.liuns.commondx"
-# 从环境变量读取路径，提供默认值保持向后兼容
-PLIST_PATH = Path(os.getenv('PLIST_PATH', str(Path.home() / f"Library/LaunchAgents/{APP_ID}.plist")))
-LOG_DIR = Path(os.getenv('LOG_DIR', str(Path.home() / "Library/Logs")))
+# 从环境变量读取路径
+_plist_path_str = os.getenv('PLIST_PATH')
+PLIST_PATH = Path(_plist_path_str)
+
+
+_log_dir_str = os.getenv('LOG_DIR')
+LOG_DIR = Path(_log_dir_str)
 
 # 应用路径候选
 APP_PATHS = [
