@@ -8,6 +8,8 @@ from pathlib import Path
 # 配置路径管理 - 在导入其他模块之前设置所有路径环境变量
 # 应用数据目录
 APP_DATA_DIR = Path.home() / "Library/Application Support/CommondX"
+
+# "/Users/zhangsong/Library/Application Support/CommondX"
 APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
 os.environ['APP_DATA_DIR'] = str(APP_DATA_DIR)
 
@@ -30,7 +32,7 @@ os.environ['LOG_DIR'] = str(Path.home() / "Library/Logs")
 
 # 打印所有配置路径（调试用）
 print(f"[DEBUG] [Main] 配置路径初始化:")
-print(f"[DEBUG] [Main]   APP_DATA_DIR = {APP_DATA_DIR}")
+print(f"[DEBUG] [Main]   APP_DATA_DIR = {APP_DATA_DIR}") 
 print(f"[DEBUG] [Main]   CONFIG_PATH = {CONFIG_PATH}")
 print(f"[DEBUG] [Main]   LICENSE_PATH = {LICENSE_PATH}")
 print(f"[DEBUG] [Main]   LOG_PATH = {LOG_PATH}")
