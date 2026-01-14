@@ -258,18 +258,52 @@ class CommondXApp(NSObject):
         except: pass
         # #endregion
         
-        # 延迟读取，确保系统已复制到剪贴板
-        time.sleep(0.1)
+        # 【优化】使用剪贴板变化序列号确保读取到最新内容
+        from AppKit import NSPasteboard, NSStringPboardType
+        pb = NSPasteboard.generalPasteboard()
         
-        # #region agent log
-        try:
-            with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"app.py:on_copy","message":"延迟后准备读取剪贴板","data":{"delay":"0.1s"},"timestamp":int(time.time()*1000)})+'\n')
-        except: pass
-        # #endregion
+        # 记录回调时的changeCount（此时可能还没更新）
+        initial_change_count = pb.changeCount()
         
-        # 读取剪贴板内容
-        current_content = get_clipboard_content()
+        # 延迟并多次尝试读取，直到读取到新内容
+        max_attempts = 10
+        attempt = 0
+        current_content = None
+        last_content = None
+        
+        while attempt < max_attempts:
+            time.sleep(0.05)  # 每次等待50ms
+            attempt += 1
+            
+            # 检查剪贴板是否变化
+            current_change_count = pb.changeCount()
+            temp_content = pb.stringForType_(NSStringPboardType)
+            
+            # 如果changeCount变化了，说明剪贴板已更新
+            if current_change_count != initial_change_count:
+                if temp_content:
+                    current_content = temp_content
+                    print(f"[App] ✓ 读取到剪贴板新内容（尝试{attempt}次，changeCount: {initial_change_count} -> {current_change_count}）")
+                    break
+            
+            # 如果内容稳定（连续两次读取相同），也认为读取成功
+            if temp_content and temp_content == last_content and attempt >= 3:
+                current_content = temp_content
+                print(f"[App] ✓ 内容已稳定（尝试{attempt}次，内容连续相同）")
+                break
+            
+            last_content = temp_content
+        
+        # 如果多次尝试后仍未读取到，使用最后一次读取的内容
+        if not current_content:
+            current_content = pb.stringForType_(NSStringPboardType)
+            if current_content:
+                print(f"[App] ⚠️ 使用当前剪贴板内容（尝试{max_attempts}次后）")
+        
+        # 如果还是读取不到，使用工具函数读取
+        if not current_content:
+            current_content = get_clipboard_content()
+        
         current_time = time.time()
         
         # #region agent log
@@ -291,8 +325,19 @@ class CommondXApp(NSObject):
         except: pass
         # #endregion
         
-        # 内容比较
-        content_equal = current_content == self.last_clipboard_content if current_content and self.last_clipboard_content else False
+        # 内容比较（优化：更详细的比较信息）
+        content_equal = False
+        if current_content and self.last_clipboard_content:
+            content_equal = current_content == self.last_clipboard_content
+            if not content_equal:
+                # 内容不同时，输出调试信息
+                print(f"[App] 内容不同 - 当前长度={len(current_content)}, 上次长度={len(self.last_clipboard_content)}")
+                print(f"[App] 当前内容预览: {repr(current_content[:50])}")
+                print(f"[App] 上次内容预览: {repr(self.last_clipboard_content[:50])}")
+        elif not current_content:
+            print(f"[App] ⚠️ 当前剪贴板内容为空")
+        elif not self.last_clipboard_content:
+            print(f"[App] ℹ️ 这是第一次复制，记录内容（下次复制相同内容时触发）")
         
         # #region agent log
         try:
@@ -327,6 +372,18 @@ class CommondXApp(NSObject):
                 f.write(json.dumps({"sessionId":"debug-session","runId":"run2","hypothesisId":"ALL","location":"app.py:on_copy","message":"触发条件检查（含防重复）","data":{"has_content":bool(current_content),"content_equal":content_equal,"time_diff":time_diff,"within_interval":time_diff < self.COPY_INTERVAL,"in_cooldown":in_cooldown,"should_trigger":should_trigger},"timestamp":int(time.time()*1000)})+'\n')
         except: pass
         # #endregion
+        
+        # 【调试优化】输出详细的触发条件信息
+        if not should_trigger and current_content:
+            reason_parts = []
+            if not content_equal:
+                reason_parts.append("内容不同")
+            if time_diff >= self.COPY_INTERVAL:
+                reason_parts.append(f"时间间隔过长({time_diff:.2f}s > {self.COPY_INTERVAL}s)")
+            if in_cooldown:
+                reason_parts.append(f"冷却中(剩余{self.TRIGGER_COOLDOWN - time_since_last_trigger:.2f}s)")
+            if reason_parts:
+                print(f"[App] 未触发原因: {', '.join(reason_parts)}")
         
         if should_trigger:
             # 【防多弹窗】检查是否已有弹窗正在显示
@@ -370,20 +427,8 @@ class CommondXApp(NSObject):
                 if self.status_bar:
                     self.status_bar.send_notification("Kimi API 调用失败", msg)
         else:
-            print(f"[App] 非连续复制或内容不同，跳过 Kimi API 调用")
-            # #region agent log
-            try:
-                reason = "content_empty" if not current_content else (
-                    "content_different" if not content_equal else (
-                        "timeout" if time_diff >= self.COPY_INTERVAL else (
-                            "in_cooldown" if in_cooldown else "unknown"
-                        )
-                    )
-                )
-                with open('/Users/zhangsong/Desktop/code/cedar_dev/mac-commondX/.cursor/debug.log', 'a') as f:
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"run2","hypothesisId":"ALL","location":"app.py:on_copy","message":"未触发原因（含防重复）","data":{"reason":reason},"timestamp":int(time.time()*1000)})+'\n')
-            except: pass
-            # #endregion
+            # 不触发时的详细日志（已在上面输出，这里简化）
+            pass
         
         # 更新记录
         # #region agent log
