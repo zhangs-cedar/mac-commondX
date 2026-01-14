@@ -41,6 +41,55 @@ def _add_menu_item(menu, target, title, action=None, key="", enabled=True):
     return item
 
 
+def _setup_edit_menu(app):
+    """
+    【关键修复】创建标准的应用程序菜单（包含编辑菜单）。
+    没有这个，Cmd+C/Cmd+V 快捷键将无法触发 copy:/paste: 事件。
+    
+    参考：test/test_alert_input.py 中的修复方案
+    """
+    print("[DEBUG] [StatusBar] 正在构建应用程序 Edit 菜单...")
+    
+    # 检查是否已经有主菜单
+    existing_menu = app.mainMenu()
+    if existing_menu:
+        # 检查是否已经有 Edit 菜单
+        menu_items = existing_menu.itemArray()
+        for item in menu_items:
+            if item.title() == "Edit":
+                print("[DEBUG] [StatusBar] ✓ Edit 菜单已存在，跳过创建")
+                return
+    
+    # 创建新的菜单栏
+    menubar = NSMenu.alloc().init()
+    
+    # 1. 应用主菜单 (App Menu)
+    app_menu_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("App", None, "")
+    menubar.addItem_(app_menu_item)
+    
+    # 2. 编辑菜单 (Edit Menu) - 这是复制粘贴生效的关键
+    edit_menu_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("Edit", None, "")
+    edit_menu = NSMenu.alloc().initWithTitle_("Edit")
+    
+    # 添加标准的编辑操作
+    # 剪切 (Cmd+X)
+    edit_menu.addItemWithTitle_action_keyEquivalent_("Cut", "cut:", "x")
+    # 复制 (Cmd+C)
+    edit_menu.addItemWithTitle_action_keyEquivalent_("Copy", "copy:", "c")
+    # 粘贴 (Cmd+V)
+    edit_menu.addItemWithTitle_action_keyEquivalent_("Paste", "paste:", "v")
+    # 全选 (Cmd+A)
+    edit_menu.addItemWithTitle_action_keyEquivalent_("Select All", "selectAll:", "a")
+    
+    # 将子菜单关联到菜单项
+    edit_menu_item.setSubmenu_(edit_menu)
+    menubar.addItem_(edit_menu_item)
+    
+    # 设置为主菜单
+    app.setMainMenu_(menubar)
+    print("[DEBUG] [StatusBar] ✓ Edit 菜单已创建并设置为主菜单")
+
+
 class StatusBarIcon(NSObject):
     """状态栏图标"""
     
@@ -297,6 +346,10 @@ class StatusBarIcon(NSObject):
         NSApp.setActivationPolicy_(0)  # NSApplicationActivationPolicyRegular
         NSApp.activateIgnoringOtherApps_(True)
         print("[DEBUG] [StatusBar] 应用已激活")
+        
+        # 【步骤 1.5】如果有输入框，确保应用有 Edit 菜单（支持 ⌘+C/⌘+V）
+        if with_input:
+            _setup_edit_menu(NSApp)
         
         # 【步骤 2】创建弹窗
         alert = NSAlert.alloc().init()
