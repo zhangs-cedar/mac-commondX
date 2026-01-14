@@ -31,6 +31,27 @@ SMART_OPS_OPTIONS = {
     "copy_paths": {"title": "复制文件路径", "action": "smartCopyPaths:"},
 }
 
+# 文件类型定义
+FILE_TYPES = {
+    "archive": {"name": "压缩包", "extensions": [".zip", ".tar", ".gz", ".bz2", ".rar", ".7z", ".tgz", ".tar.gz", ".tar.bz2"]},
+    "markdown": {"name": "Markdown", "extensions": [".md", ".markdown"]},
+    "image": {"name": "图片", "extensions": [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".webp", ".svg"]},
+    "text": {"name": "文本文件", "extensions": [".txt", ".log", ".conf", ".config", ".ini", ".csv", ".tsv"]},
+    "code": {"name": "代码文件", "extensions": [".py", ".js", ".ts", ".java", ".cpp", ".c", ".h", ".go", ".rs", ".swift"]},
+    "other": {"name": "其他", "extensions": []}  # 其他所有文件类型
+}
+
+# 所有文件类型键（用于默认配置）
+ALL_FILE_TYPES = list(FILE_TYPES.keys())
+
+# 每个操作的默认支持文件类型
+DEFAULT_SUPPORTED_TYPES = {
+    "compress": ALL_FILE_TYPES,  # 压缩文件支持所有类型
+    "decompress": ["archive"],  # 解压缩文件仅支持压缩包
+    "md_to_html": ["markdown"],  # MD转HTML仅支持Markdown
+    "copy_paths": ALL_FILE_TYPES,  # 复制文件路径支持所有类型
+}
+
 
 def _add_menu_item(menu, target, title, action=None, key="", enabled=True):
     """创建菜单项（类外函数避免 PyObjC 冲突）"""
@@ -111,38 +132,95 @@ class StatusBarIcon(NSObject):
     
     def _load_smart_ops_config(self):
         """
-        加载智能操作配置
+        加载智能操作配置（支持新格式：包含 enabled 和 supported_types）
         
         按照流程图设计：配置选项控制操作选项的显示
+        兼容旧配置格式（简单的 enabled: true/false）
         """
         print("[DEBUG] [StatusBar] 加载智能操作配置...")
         try:
             if CONFIG_PATH.exists():
                 data = load_config(str(CONFIG_PATH)) or {}
-                enabled = data.get('smart_ops', {})
-                print(f"[DEBUG] [StatusBar] 从配置文件读取: {enabled}")
+                smart_ops = data.get('smart_ops', {})
+                print(f"[DEBUG] [StatusBar] 从配置文件读取: {smart_ops}")
                 
-                # 如果配置为空，默认启用所有选项
-                if not enabled:
-                    enabled = {key: True for key in SMART_OPS_OPTIONS.keys()}
-                    self._save_smart_ops_config(enabled)
-                    print(f"[DEBUG] [StatusBar] 配置为空，使用默认配置（全部启用）")
+                # 如果配置为空，使用默认配置
+                if not smart_ops:
+                    smart_ops = self._get_default_smart_ops_config()
+                    self._save_smart_ops_config(smart_ops)
+                    print(f"[DEBUG] [StatusBar] 配置为空，使用默认配置")
                 
-                # 验证配置完整性（确保所有选项都有配置）
+                # 验证和迁移配置
+                result = {}
                 for key in SMART_OPS_OPTIONS.keys():
-                    if key not in enabled:
-                        enabled[key] = True
-                        print(f"[DEBUG] [StatusBar] 补充缺失配置项: {key} = True")
+                    if key not in smart_ops:
+                        # 缺失配置项，使用默认值
+                        result[key] = {
+                            "enabled": True,
+                            "supported_types": DEFAULT_SUPPORTED_TYPES.get(key, ALL_FILE_TYPES)
+                        }
+                        print(f"[DEBUG] [StatusBar] 补充缺失配置项: {key}")
+                    else:
+                        op_config = smart_ops[key]
+                        # 兼容旧格式：如果直接是 bool，转换为新格式
+                        if isinstance(op_config, bool):
+                            result[key] = {
+                                "enabled": op_config,
+                                "supported_types": DEFAULT_SUPPORTED_TYPES.get(key, ALL_FILE_TYPES)
+                            }
+                            print(f"[DEBUG] [StatusBar] 迁移旧配置格式: {key}")
+                        elif isinstance(op_config, dict):
+                            # 新格式：确保包含所有字段
+                            result[key] = {
+                                "enabled": op_config.get("enabled", True),
+                                "supported_types": op_config.get("supported_types", DEFAULT_SUPPORTED_TYPES.get(key, ALL_FILE_TYPES))
+                            }
+                        else:
+                            # 未知格式，使用默认值
+                            result[key] = {
+                                "enabled": True,
+                                "supported_types": DEFAULT_SUPPORTED_TYPES.get(key, ALL_FILE_TYPES)
+                            }
+                            print(f"[WARN] [StatusBar] 未知配置格式: {key}, 使用默认值")
                 
-                print(f"[DEBUG] [StatusBar] ✓ 配置加载成功: {enabled}")
-                return enabled
+                # 保存迁移后的配置
+                if result != smart_ops:
+                    self._save_smart_ops_config(result)
+                    print(f"[DEBUG] [StatusBar] 配置已迁移并保存")
+                
+                print(f"[DEBUG] [StatusBar] ✓ 配置加载成功")
+                return result
         except Exception as e:
             print(f"[ERROR] [StatusBar] 加载配置失败: {e}")
         
-        # 默认启用所有选项
-        default = {key: True for key in SMART_OPS_OPTIONS.keys()}
-        print(f"[DEBUG] [StatusBar] 使用默认配置: {default}")
+        # 使用默认配置
+        default = self._get_default_smart_ops_config()
+        print(f"[DEBUG] [StatusBar] 使用默认配置")
         return default
+    
+    def _get_default_smart_ops_config(self):
+        """获取默认的智能操作配置"""
+        return {
+            key: {
+                "enabled": True,
+                "supported_types": DEFAULT_SUPPORTED_TYPES.get(key, ALL_FILE_TYPES)
+            }
+            for key in SMART_OPS_OPTIONS.keys()
+        }
+    
+    def _is_op_enabled(self, key: str) -> bool:
+        """检查操作是否启用"""
+        op_config = self.enabled_ops.get(key, {})
+        if isinstance(op_config, bool):
+            return op_config
+        return op_config.get("enabled", True)
+    
+    def _get_op_supported_types(self, key: str) -> list:
+        """获取操作支持的文件类型"""
+        op_config = self.enabled_ops.get(key, {})
+        if isinstance(op_config, bool):
+            return DEFAULT_SUPPORTED_TYPES.get(key, ALL_FILE_TYPES)
+        return op_config.get("supported_types", DEFAULT_SUPPORTED_TYPES.get(key, ALL_FILE_TYPES))
     
     def _load_smart_ops_order(self):
         """
@@ -183,6 +261,54 @@ class StatusBarIcon(NSObject):
         print(f"[DEBUG] [StatusBar] 使用默认顺序: {default_order}")
         return default_order
     
+    def _detect_file_type(self, file_path: str) -> str:
+        """
+        检测单个文件的类型
+        
+        Args:
+            file_path: 文件路径
+            
+        Returns:
+            str: 文件类型键（archive, markdown, image, text, code, other）
+        """
+        print(f"[DEBUG] [StatusBar] 检测文件类型: {file_path}")
+        try:
+            path = Path(file_path)
+            ext = path.suffix.lower()
+            
+            # 检查所有文件类型（除了 other）
+            for type_key, type_info in FILE_TYPES.items():
+                if type_key == "other":
+                    continue
+                if ext in type_info["extensions"]:
+                    print(f"[DEBUG] [StatusBar] 检测到文件类型: {type_key} (扩展名: {ext})")
+                    return type_key
+            
+            # 如果没有匹配，返回 other
+            print(f"[DEBUG] [StatusBar] 未匹配到特定类型，返回 other (扩展名: {ext})")
+            return "other"
+        except Exception as e:
+            print(f"[ERROR] [StatusBar] 检测文件类型失败: {e}")
+            return "other"
+    
+    def _get_file_types(self, file_paths: list) -> set:
+        """
+        获取文件列表的所有类型（去重）
+        
+        Args:
+            file_paths: 文件路径列表
+            
+        Returns:
+            set: 文件类型集合
+        """
+        print(f"[DEBUG] [StatusBar] 获取文件类型集合，文件数量: {len(file_paths)}")
+        types = set()
+        for file_path in file_paths:
+            file_type = self._detect_file_type(file_path)
+            types.add(file_type)
+        print(f"[DEBUG] [StatusBar] 文件类型集合: {types}")
+        return types
+    
     def _save_smart_ops_order(self, order):
         """
         保存智能操作顺序配置
@@ -208,14 +334,17 @@ class StatusBarIcon(NSObject):
         except Exception as e:
             print(f"[ERROR] [StatusBar] 保存顺序配置失败: {e}")
     
-    def _save_smart_ops_config(self, enabled):
+    def _save_smart_ops_config(self, smart_ops):
         """
-        保存智能操作配置
+        保存智能操作配置（新格式：包含 enabled 和 supported_types）
         
         按照流程图设计：配置保存后立即生效
         注意：配置文件已与许可证文件分离，只包含配置相关字段
+        
+        Args:
+            smart_ops: 智能操作配置字典，格式为 {key: {"enabled": bool, "supported_types": list}}
         """
-        print(f"[DEBUG] [StatusBar] 保存智能操作配置: {enabled}")
+        print(f"[DEBUG] [StatusBar] 保存智能操作配置")
         try:
             CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
             print(f"[DEBUG] [StatusBar] 配置文件路径: {CONFIG_PATH}")
@@ -227,7 +356,7 @@ class StatusBarIcon(NSObject):
                 print(f"[DEBUG] [StatusBar] 读取现有配置: {list(data.keys())}")
             
             # 更新配置相关字段
-            data['smart_ops'] = enabled
+            data['smart_ops'] = smart_ops
             # 同时保存顺序配置（如果存在）
             if hasattr(self, 'ops_order') and self.ops_order:
                 data['smart_ops_order'] = self.ops_order
@@ -547,15 +676,18 @@ class StatusBarIcon(NSObject):
         self.status_item.setMenu_(menu)
         print("[DEBUG] [StatusBar] ✓ 菜单设置完成")
     
-    def _build_smart_ops_menu(self):
+    def _build_smart_ops_menu(self, files: list = None):
         """
-        根据配置构建智能操作菜单
+        根据配置构建智能操作菜单（支持根据文件类型过滤）
         
         按照流程图设计：
         1. 说明项
-        2. 操作选项（根据配置显示，按照配置顺序）
+        2. 操作选项（根据配置和文件类型显示，按照配置顺序）
+        
+        Args:
+            files: 文件路径列表，如果提供则根据文件类型过滤操作
         """
-        print("[DEBUG] [StatusBar] 构建智能操作菜单...")
+        print(f"[DEBUG] [StatusBar] 构建智能操作菜单... (文件数量: {len(files) if files else 0})")
         menu = NSMenu.alloc().init()
         
         # 【步骤 1】添加说明项（禁用状态，仅用于提示）
@@ -563,7 +695,13 @@ class StatusBarIcon(NSObject):
         menu.addItem_(NSMenuItem.separatorItem())
         print("[DEBUG] [StatusBar] 已添加说明项")
         
-        # 【步骤 2】根据配置和顺序添加操作选项（按照流程图：操作选项根据配置显示）
+        # 【步骤 2】检测文件类型（如果提供了文件列表）
+        file_types = None
+        if files:
+            file_types = self._get_file_types(files)
+            print(f"[DEBUG] [StatusBar] 检测到文件类型: {file_types}")
+        
+        # 【步骤 3】根据配置和顺序添加操作选项（按照流程图：操作选项根据配置和文件类型显示）
         order = getattr(self, 'ops_order', list(SMART_OPS_OPTIONS.keys()))
         print(f"[DEBUG] [StatusBar] 使用顺序: {order}")
         
@@ -571,11 +709,26 @@ class StatusBarIcon(NSObject):
         for key in order:
             if key not in SMART_OPS_OPTIONS:
                 continue
-            if self.enabled_ops.get(key, True):
-                option = SMART_OPS_OPTIONS[key]
-                _add_menu_item(menu, self, option["title"], option["action"])
-                enabled_count += 1
-                print(f"[DEBUG] [StatusBar] 已添加操作选项: {option['title']}")
+            
+            # 检查操作是否启用
+            if not self._is_op_enabled(key):
+                print(f"[DEBUG] [StatusBar] 操作已禁用: {key}")
+                continue
+            
+            # 如果提供了文件列表，检查文件类型是否匹配
+            if files and file_types:
+                supported_types = set(self._get_op_supported_types(key))
+                # 检查文件类型是否与操作支持的类型有交集
+                if not (file_types & supported_types):
+                    print(f"[DEBUG] [StatusBar] 文件类型不匹配，跳过操作: {key} (文件类型: {file_types}, 支持类型: {supported_types})")
+                    continue
+            
+            # 添加操作选项
+            option = SMART_OPS_OPTIONS[key]
+            _add_menu_item(menu, self, option["title"], option["action"])
+            enabled_count += 1
+            print(f"[DEBUG] [StatusBar] 已添加操作选项: {option['title']}")
+        
         print(f"[DEBUG] [StatusBar] 操作选项构建完成，共 {enabled_count} 个")
         
         print(f"[DEBUG] [StatusBar] ✓ 智能操作菜单构建完成")
@@ -606,7 +759,7 @@ class StatusBarIcon(NSObject):
                 continue
             
             option = SMART_OPS_OPTIONS[key]
-            is_enabled = self.enabled_ops.get(key, True)
+            is_enabled = self._is_op_enabled(key)
             
             # 为每个配置项创建子菜单（点击不关闭主菜单）
             submenu = NSMenu.alloc().init()
@@ -619,6 +772,13 @@ class StatusBarIcon(NSObject):
             toggle_item.setRepresentedObject_(key)
             toggle_item.setState_(1 if is_enabled else 0)
             submenu.addItem_(toggle_item)
+            
+            # 子菜单项2：支持的文件类型（新增）
+            file_types_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                "支持的文件类型", None, ""
+            )
+            file_types_item.setSubmenu_(self._build_file_types_menu(key))
+            submenu.addItem_(file_types_item)
             
             # 子菜单项2：上移（如果不是第一个）
             if idx > 0:
@@ -657,6 +817,144 @@ class StatusBarIcon(NSObject):
         
         print(f"[DEBUG] [StatusBar] ✓ 配置选项菜单构建完成")
         return menu
+    
+    def _build_file_types_menu(self, operation_key: str) -> NSMenu:
+        """
+        构建文件类型选择菜单
+        
+        Args:
+            operation_key: 操作键（compress, decompress, md_to_html, copy_paths）
+            
+        Returns:
+            NSMenu: 文件类型选择菜单
+        """
+        print(f"[DEBUG] [StatusBar] 构建文件类型选择菜单: {operation_key}")
+        menu = NSMenu.alloc().init()
+        
+        # 获取当前操作支持的文件类型
+        supported_types = self._get_op_supported_types(operation_key)
+        print(f"[DEBUG] [StatusBar] 当前支持的文件类型: {supported_types}")
+        
+        # 添加全选/全不选快捷操作
+        all_selected = set(supported_types) == set(ALL_FILE_TYPES)
+        select_all_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "全选" if not all_selected else "全不选", "toggleAllFileTypes:", ""
+        )
+        select_all_item.setTarget_(self)
+        select_all_item.setRepresentedObject_(operation_key)
+        menu.addItem_(select_all_item)
+        menu.addItem_(NSMenuItem.separatorItem())
+        
+        # 添加每个文件类型选项
+        for type_key in ALL_FILE_TYPES:
+            type_info = FILE_TYPES[type_key]
+            is_supported = type_key in supported_types
+            
+            type_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                f"{'☑' if is_supported else '☐'} {type_info['name']}", "toggleFileType:", ""
+            )
+            type_item.setTarget_(self)
+            # 使用 representedObject 存储 (operation_key, type_key) 元组
+            type_item.setRepresentedObject_({"operation": operation_key, "type": type_key})
+            type_item.setState_(1 if is_supported else 0)
+            menu.addItem_(type_item)
+        
+        print(f"[DEBUG] [StatusBar] ✓ 文件类型选择菜单构建完成")
+        return menu
+    
+    @objc.IBAction
+    def toggleFileType_(self, sender):
+        """切换文件类型支持状态"""
+        data = sender.representedObject()
+        if not data or not isinstance(data, dict):
+            print(f"[ERROR] [StatusBar] 无法获取操作和类型信息")
+            return
+        
+        operation_key = data.get("operation")
+        type_key = data.get("type")
+        
+        if not operation_key or not type_key:
+            print(f"[ERROR] [StatusBar] 操作或类型信息不完整")
+            return
+        
+        print(f"[DEBUG] [StatusBar] 切换文件类型支持: {operation_key} - {type_key}")
+        
+        # 获取当前支持的文件类型
+        supported_types = self._get_op_supported_types(operation_key)
+        
+        # 切换状态
+        if type_key in supported_types:
+            supported_types = [t for t in supported_types if t != type_key]
+        else:
+            supported_types = list(supported_types) + [type_key]
+        
+        # 更新配置
+        op_config = self.enabled_ops.get(operation_key, {})
+        if isinstance(op_config, bool):
+            # 旧格式，转换为新格式
+            self.enabled_ops[operation_key] = {
+                "enabled": op_config,
+                "supported_types": supported_types
+            }
+        else:
+            # 新格式，更新 supported_types
+            self.enabled_ops[operation_key] = {
+                "enabled": op_config.get("enabled", True),
+                "supported_types": supported_types
+            }
+        
+        # 保存配置
+        self._save_smart_ops_config(self.enabled_ops)
+        
+        # 重建菜单
+        self._rebuild_menus()
+        
+        print(f"[DEBUG] [StatusBar] ✓ 文件类型支持已更新: {operation_key} - {supported_types}")
+    
+    @objc.IBAction
+    def toggleAllFileTypes_(self, sender):
+        """全选/全不选文件类型"""
+        operation_key = sender.representedObject()
+        if not operation_key:
+            print(f"[ERROR] [StatusBar] 无法获取操作信息")
+            return
+        
+        print(f"[DEBUG] [StatusBar] 全选/全不选文件类型: {operation_key}")
+        
+        # 获取当前支持的文件类型
+        supported_types = self._get_op_supported_types(operation_key)
+        all_selected = set(supported_types) == set(ALL_FILE_TYPES)
+        
+        # 切换状态
+        if all_selected:
+            # 全不选
+            new_supported_types = []
+        else:
+            # 全选
+            new_supported_types = ALL_FILE_TYPES.copy()
+        
+        # 更新配置
+        op_config = self.enabled_ops.get(operation_key, {})
+        if isinstance(op_config, bool):
+            # 旧格式，转换为新格式
+            self.enabled_ops[operation_key] = {
+                "enabled": op_config,
+                "supported_types": new_supported_types
+            }
+        else:
+            # 新格式，更新 supported_types
+            self.enabled_ops[operation_key] = {
+                "enabled": op_config.get("enabled", True),
+                "supported_types": new_supported_types
+            }
+        
+        # 保存配置
+        self._save_smart_ops_config(self.enabled_ops)
+        
+        # 重建菜单
+        self._rebuild_menus()
+        
+        print(f"[DEBUG] [StatusBar] ✓ 文件类型支持已更新: {operation_key} - {new_supported_types}")
     
     @objc.IBAction
     def showActivationInput_(self, sender):
@@ -816,9 +1114,24 @@ class StatusBarIcon(NSObject):
         print(f"[DEBUG] [StatusBar] 切换选项状态: {key}")
         
         # 【步骤 1】切换状态
-        current_state = self.enabled_ops.get(key, True)
+        current_state = self._is_op_enabled(key)
         new_state = not current_state
-        self.enabled_ops[key] = new_state
+        
+        # 更新配置（保持 supported_types）
+        op_config = self.enabled_ops.get(key, {})
+        if isinstance(op_config, bool):
+            # 旧格式，转换为新格式
+            self.enabled_ops[key] = {
+                "enabled": new_state,
+                "supported_types": DEFAULT_SUPPORTED_TYPES.get(key, ALL_FILE_TYPES)
+            }
+        else:
+            # 新格式，只更新 enabled
+            self.enabled_ops[key] = {
+                "enabled": new_state,
+                "supported_types": op_config.get("supported_types", DEFAULT_SUPPORTED_TYPES.get(key, ALL_FILE_TYPES))
+            }
+        
         print(f"[DEBUG] [StatusBar] 状态切换: {current_state} -> {new_state}")
         
         # 【步骤 2】保存配置
@@ -951,25 +1264,29 @@ class StatusBarIcon(NSObject):
         self.cached_files = files
         print(f"[DEBUG] [StatusBar] 缓存文件列表: {len(files)} 个文件")
         
-        # 【步骤 2】获取状态栏按钮
+        # 【步骤 2】根据文件列表动态构建智能操作菜单（根据文件类型过滤）
+        smart_ops_menu = self._build_smart_ops_menu(files)
+        print(f"[DEBUG] [StatusBar] 已根据文件类型构建智能操作菜单")
+        
+        # 【步骤 3】获取状态栏按钮
         button = self.status_item.button()
         if not button:
             print("[ERROR] [StatusBar] 无法获取状态栏按钮，菜单显示失败")
             return
         
-        # 【步骤 3】临时替换菜单为智能操作菜单
+        # 【步骤 4】临时替换菜单为智能操作菜单
         original_menu = self.status_item.menu()
-        self.status_item.setMenu_(self.smart_ops_menu)
+        self.status_item.setMenu_(smart_ops_menu)
         print("[DEBUG] [StatusBar] 已临时替换菜单")
         
-        # 【步骤 4】获取按钮位置并显示菜单
+        # 【步骤 5】获取按钮位置并显示菜单
         frame = button.frame()
         point = NSPoint(frame.origin.x, frame.origin.y - frame.size.height)
         print(f"[DEBUG] [StatusBar] 菜单显示位置: ({point.x}, {point.y})")
         
         # 使用 popUpMenuPositioningItem 显示菜单，支持键盘导航
         # 按照流程图：支持键盘上下键选择，回车确认，ESC 取消
-        self.smart_ops_menu.popUpMenuPositioningItem_atLocation_inView_(
+        smart_ops_menu.popUpMenuPositioningItem_atLocation_inView_(
             None, point, button
         )
         
