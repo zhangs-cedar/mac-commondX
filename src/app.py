@@ -1,8 +1,20 @@
 #!/usr/bin/env python3
+"""
+CommondX 应用主逻辑
+
+【工作流程说明】
+按照流程图顺序：
+1. EventTap 捕获 ⌘+X 事件
+2. EventTap 检查是否为 Finder 窗口
+3. EventTap 检查许可证
+4. EventTap 调用 on_cut()（如果许可证有效）
+5. on_cut() 调用 cut_manager.cut() 处理文件选择
+6. 如果选择相同，显示智能操作弹窗
+7. 处理用户选择的操作（复制路径/压缩/解压）
+"""
+
 import time
 import objc
-import threading
-import traceback
 from Foundation import NSObject, NSTimer
 from AppKit import NSPasteboard, NSStringPboardType
 from cedar.utils import print
@@ -11,31 +23,36 @@ from .event_tap import EventTap
 from .cut_manager import CutManager
 from .status_bar import StatusBarIcon
 from .license_manager import license_manager
-from .permission import check_accessibility, request_accessibility
+from .permission import check_accessibility, request_accessibility, open_accessibility_settings
 from .utils import get_clipboard_content
 
+
 class CommondXApp(NSObject):
+    """CommondX 应用代理"""
+    
     def init(self):
         self = objc.super(CommondXApp, self).init()
         if self:
             self.cut_manager = self.event_tap = self.status_bar = None
-            
-            # AI 触发相关状态
+            self._current_alert = None  # 当前弹窗引用
+            # Kimi API 相关变量
             self.last_clipboard_content = None
             self.last_copy_time = 0
-            self.last_triggered_content = None
-            self.last_triggered_time = 0
-            
-            # 配置项
-            self.COPY_INTERVAL = 5.0      # 5秒内双击触发
-            self.TRIGGER_COOLDOWN = 3.0   # 触发后冷却
-            self._is_processing_api = False # 线程锁
-            
+            self.COPY_INTERVAL = 5.0  # 5秒内的连续复制视为"连续"（放宽限制）
+            self.last_triggered_content = None  # 最近一次触发的内容
+            self.last_triggered_time = 0  # 最近一次触发的时间
+            self.TRIGGER_COOLDOWN = 3.0  # 触发冷却时间，避免重复触发
         return self
     
     def applicationDidFinishLaunching_(self, _):
+        """应用启动"""
+        print("CommondX 启动中...")
+        self.license_status, code, self.remaining = license_manager.get_status()
+        print(f"License: {self.license_status}, Code: {code}, Remaining: {self.remaining}d")
+        
         self.cut_manager = CutManager()
         self.status_bar = StatusBarIcon.alloc().initWithCutManager_(self.cut_manager)
+        # 传入许可证无效时的回调函数
         self.event_tap = EventTap(
             on_cut=self.on_cut,
             on_paste=self.on_paste,
@@ -45,118 +62,335 @@ class CommondXApp(NSObject):
         self._try_start()
     
     def _try_start(self):
+        """尝试启动"""
         if check_accessibility():
-            return self.event_tap.start()
+            return self._start_event_tap()
+        
+        print("需要辅助功能权限...")
         request_accessibility()
+        self.status_bar.send_notification("需要授权", "请在系统设置中授权")
+        self._perm_count = 0
         NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
             2.0, self, "_checkPermission:", None, True
         )
     
     def _checkPermission_(self, timer):
+        """定时检查权限"""
+        self._perm_count += 1
         if check_accessibility():
             timer.invalidate()
-            self.event_tap.start()
-
-    def on_copy(self):
-        """⌘+C 回调处理"""
-        try:
-            # 读取剪贴板内容
-            content = self._read_clipboard_safe()
-            now = time.time()
-            if not content: return
-
-            # 触发逻辑判断
-            if self._should_trigger(content, now):
-                # 开启异步线程处理 API，避免卡顿
-                thread = threading.Thread(target=self._call_ai_task, args=(content,))
-                thread.daemon = True
-                thread.start()
-            
-            self.last_clipboard_content = content
-            self.last_copy_time = now
-            
-        except Exception as e:
-            print(f"on_copy error: {e}")
-
-    def _should_trigger(self, content, now):
-        if self._is_processing_api: return False
+            print("已获得权限")
+            self._start_event_tap()
+        elif self._perm_count >= 30:
+            timer.invalidate()
+            print("权限检查超时")
+            self.status_bar.send_notification("授权超时", "请点击菜单'检查权限'重试")
+    
+    def retry_permission_check(self):
+        """手动检查权限"""
+        if self.event_tap and self.event_tap.running:
+            return True
+        if check_accessibility():
+            self._start_event_tap()
+            return True
+        open_accessibility_settings()
+        self.status_bar.send_notification("请授权", "请在设置中授权 CommondX")
+        return False
+    
+    def _start_event_tap(self):
+        """启动事件监听"""
+        if not self.event_tap.start():
+            print("启动失败")
+            self.status_bar.send_notification("启动失败", "请重启应用")
+            return
         
-        c_strip = content.strip()
-        l_strip = self.last_clipboard_content.strip() if self.last_clipboard_content else ""
+        print("CommondX 已启动")
+        msgs = {
+            "trial": f"试用期剩余 {self.remaining} 天",
+            "expired": "试用期已结束，请购买激活码延长1年"
+        }
+        msg = msgs.get(self.license_status, "已启动，⌘+X 剪切文件")
+        self.status_bar.send_notification("CommondX", msg)
+    
+    def _on_license_invalid(self):
+        """
+        许可证无效时的回调函数
         
-        if len(c_strip) < 2: return False # 太短不触发
+        由 EventTap 在检测到许可证无效时调用，用于显示激活提示。
+        注意：这个函数在系统事件回调中被调用，所以不能执行耗时操作。
+        """
+        print("[5] [App] 许可证无效，显示激活提示")
+        self.status_bar.show_activation_required()
+    
+    def _restoreEventTap_(self, timer):
+        """
+        延迟恢复 Event Tap（由定时器调用）
         
-        time_diff = now - self.last_copy_time
-        is_double_copy = (c_strip == l_strip) and (0.1 < time_diff < self.COPY_INTERVAL)
+        在弹窗关闭后延迟调用，确保系统完全退出模态状态后再恢复 Event Tap。
+        会尝试多次，直到成功或达到最大尝试次数。
+        """
+        if not hasattr(self, '_restore_event_tap_attempts'):
+            self._restore_event_tap_attempts = 0
+            self._restore_event_tap_max_attempts = 3
         
-        # 冷却检查：防止对同一内容短时间内重复弹窗
-        is_cooling = (c_strip == (self.last_triggered_content or "").strip()) and \
-                     (now - self.last_triggered_time < self.TRIGGER_COOLDOWN)
+        self._restore_event_tap_attempts += 1
+        attempt = self._restore_event_tap_attempts
+        max_attempts = self._restore_event_tap_max_attempts
         
-        return is_double_copy and not is_cooling
-
-    def _call_ai_task(self, content):
-        """后台 API 任务"""
-        self._is_processing_api = True
-        self.last_triggered_content = content
-        self.last_triggered_time = time.time()
+        print(f"[7.4] [App] 延迟恢复 Event Tap（尝试 {attempt}/{max_attempts}）...")
         
-        from .plugins.kimi_api_plugin import execute
-        success, msg, result = execute(content, "translate")
+        if self.event_tap:
+            if self.event_tap.ensure_enabled():
+                print(f"[7.4] [App] ✓ Event Tap 已确保启用（尝试 {attempt}）")
+                self._restore_event_tap_attempts = 0  # 成功后重置计数器
+                return
+            else:
+                print(f"[7.4] [App] ✗ Event Tap 确保启用失败（尝试 {attempt}），尝试重新启动...")
+                if self.event_tap.running:
+                    self.event_tap.stop()
+                if self.event_tap.start():
+                    print(f"[7.4] [App] ✓ Event Tap 已重新启动（尝试 {attempt}）")
+                    self._restore_event_tap_attempts = 0  # 成功后重置计数器
+                    return
+                else:
+                    print(f"[7.4] [App] ✗ Event Tap 重新启动失败（尝试 {attempt}）")
         
-        if success:
-            # 回到主线程弹出 UI
-            self.performSelectorOnMainThread_withObject_waitUntilDone_(
-                "showResult:", result, False
-            )
-        self._is_processing_api = False
-
-    @objc.signature(b'v@:@')
-    def showResult_(self, result):
-        if self.status_bar:
-            self.status_bar.show_kimi_result_popup(self.last_triggered_content, result)
-
-    def _read_clipboard_safe(self):
-        pb = NSPasteboard.generalPasteboard()
-        for _ in range(3): # 尝试 3 次解决系统同步延迟
-            res = pb.stringForType_(NSStringPboardType)
-            if res: return res
-            time.sleep(0.05)
-        return get_clipboard_content()
+        # 如果达到最大尝试次数，记录警告
+        if attempt >= max_attempts:
+            print(f"[7.4] [App] ⚠️ Event Tap 恢复失败，已达到最大尝试次数 {max_attempts}")
+    
     def on_cut(self):
-        """⌘+X 回调函数"""
+        """
+        ⌘+X 回调函数
+        
+        【调用时机】
+        当用户在 Finder 中按下 ⌘+X 时，EventTap 会调用这个函数。
+        注意：此时已经通过了许可证检查（在 EventTap 中完成）。
+        
+        【工作流程】
+        1. 调用 cut_manager.cut() 处理文件选择
+        2. 如果选择与上次相同，显示智能操作弹窗
+        3. 如果选择不同，执行正常的剪切操作
+        """
+        print("[5] [App] on_cut() 被调用（已通过许可证检查）")
+        
+        # 【步骤 6】调用 cut_manager.cut() 处理文件选择
+        print("[6] [App] 调用 cut_manager.cut()...")
         success, should_show_dialog = self.cut_manager.cut()
+        print(f"[6] [App] cut_manager.cut() 返回 - success={success}, should_show_dialog={should_show_dialog}")
+        print(f"[6] [App] 当前 last_selection={self.cut_manager.last_selection}")
+        
         if not success:
+            print("[6] [App] cut() 失败（无文件或文件无效），返回 False")
             return False
         
+        # 【步骤 7】如果应该显示智能操作菜单（选择与上次相同）
         if should_show_dialog:
+            print("[7] [App] 需要显示智能操作菜单（选择与上次相同）")
             files = self.cut_manager.last_selection
-            if files and self.status_bar:
+            print(f"[7] [App] 文件列表: {files}")
+            
+            if not files:
+                print("[7] [App] 文件列表为空，跳过菜单显示")
+                return True
+            
+            # 【步骤 7.1】显示状态栏菜单（支持键盘上下键导航）
+            print("[7.1] [App] 显示文件智能操作菜单...")
+            if self.status_bar:
                 self.status_bar.show_smart_operations_menu(files)
+                print("[7.1] [App] ✓ 菜单已显示，用户可以使用键盘上下键选择操作")
+            else:
+                print("[7.1] [App] ✗ 状态栏未初始化，无法显示菜单")
+            
+            # 注意：菜单选择后会自动调用对应的处理方法（smartCompress_、smartDecompress_ 等）
+            # 这些方法会处理操作并重置 last_selection
+            # 如果用户没有选择任何操作（按 ESC 或点击外部），保持 last_selection 不变
+            
             return True
+        
+        # 【步骤 8】正常剪切操作（选择与上次不同）
+        print("[8] [App] 执行正常剪切操作（选择与上次不同）")
+        if self.cut_manager.has_cut_files:
+            count = self.cut_manager.count
+            print(f"[8] [App] 已剪切 {count} 个文件")
+            # self.status_bar.send_notification("已剪切", f"{count} 个文件待移动")
+        else:
+            print("[8] [App] 无剪切文件")
         
         return True
     
     def on_paste(self):
-        """⌘+V 回调函数"""
+        """
+        ⌘+V 回调函数
+        
+        注意：许可证检查已在 EventTap 中完成。
+        """
+        print("[App] on_paste() 被调用")
         if not self.cut_manager.has_cut_files:
+            print("[App] 无待移动文件，返回 False")
             return False
+        print("[App] 执行粘贴（移动）操作...")
         ok, msg = self.cut_manager.paste()
+        print(f"[App] 粘贴操作完成: {msg}")
         return True
     
     def _read_clipboard_content(self):
-        """高效读取剪贴板内容"""
+        """
+        读取剪贴板内容
+        
+        使用剪贴板变化序列号确保读取到最新内容，多次尝试直到成功。
+        """
         pb = NSPasteboard.generalPasteboard()
-        # 尝试多次读取以应对系统剪贴板更新延迟
-        for _ in range(3):
-            content = pb.stringForType_(NSStringPboardType)
-            if content:
-                return content
-            time.sleep(0.05)
-        return get_clipboard_content()
-
+        initial_change_count = pb.changeCount()
+        
+        max_attempts = 10
+        attempt = 0
+        current_content = None
+        last_content = None
+        
+        while attempt < max_attempts:
+            time.sleep(0.05)  # 每次等待50ms
+            attempt += 1
+            
+            current_change_count = pb.changeCount()
+            temp_content = pb.stringForType_(NSStringPboardType)
+            
+            # 如果changeCount变化了，说明剪贴板已更新
+            if current_change_count != initial_change_count:
+                if temp_content:
+                    current_content = temp_content
+                    print(f"[App] ✓ 读取到剪贴板新内容（尝试{attempt}次，changeCount: {initial_change_count} -> {current_change_count}）")
+                    break
+            
+            # 如果内容稳定（连续两次读取相同），也认为读取成功
+            if temp_content and temp_content == last_content and attempt >= 3:
+                current_content = temp_content
+                print(f"[App] ✓ 内容已稳定（尝试{attempt}次，内容连续相同）")
+                break
+            
+            last_content = temp_content
+        
+        # 如果多次尝试后仍未读取到，使用最后一次读取的内容
+        if not current_content:
+            current_content = pb.stringForType_(NSStringPboardType)
+            if current_content:
+                print(f"[App] ⚠️ 使用当前剪贴板内容（尝试{max_attempts}次后）")
+        
+        # 如果还是读取不到，使用工具函数读取
+        if not current_content:
+            current_content = get_clipboard_content()
+        
+        return current_content
+    
+    def _should_trigger_kimi(self, current_content, current_time):
+        """
+        检查是否应该触发 Kimi API
+        
+        触发条件：
+        1. 连续两次复制的内容相同
+        2. 时间间隔在 5 秒内（避免间隔太久）
+        3. 不在冷却时间内（3秒内不重复触发相同内容，避免快速复制时多个弹窗）
+        """
+        if not current_content:
+            return False
+        
+        # 计算时间差
+        time_diff = current_time - self.last_copy_time if self.last_copy_time > 0 else float('inf')
+        
+        # 内容比较
+        content_equal = current_content == self.last_clipboard_content if self.last_clipboard_content else False
+        
+        # 防重复触发检查
+        time_since_last_trigger = current_time - self.last_triggered_time if self.last_triggered_time > 0 else float('inf')
+        is_same_as_last_trigger = current_content == self.last_triggered_content if self.last_triggered_content else False
+        in_cooldown = is_same_as_last_trigger and time_since_last_trigger < self.TRIGGER_COOLDOWN
+        
+        should_trigger = (content_equal and 
+            time_diff < self.COPY_INTERVAL and
+            not in_cooldown)
+        
+        # 输出详细的触发条件信息
+        if not should_trigger:
+            reason_parts = []
+            if not content_equal:
+                reason_parts.append("内容不同")
+            if time_diff >= self.COPY_INTERVAL:
+                reason_parts.append(f"时间间隔过长({time_diff:.2f}s > {self.COPY_INTERVAL}s)")
+            if in_cooldown:
+                reason_parts.append(f"冷却中(剩余{self.TRIGGER_COOLDOWN - time_since_last_trigger:.2f}s)")
+            if reason_parts:
+                print(f"[App] 未触发原因: {', '.join(reason_parts)}")
+        
+        return should_trigger
+    
+    def on_copy(self):
+        """
+        ⌘+C 回调函数（全局监听）
+        
+        检测连续两次 ⌘+C 复制相同内容时，调用 Kimi API 进行翻译、解释等处理。
+        """
+        print("[App] on_copy() 被调用（全局监听）")
+        
+        # 读取剪贴板内容
+        current_content = self._read_clipboard_content()
+        current_time = time.time()
+        
+        print(f"[App] 剪贴板内容长度: {len(current_content) if current_content else 0}")
+        
+        # 内容比较（输出调试信息）
+        if current_content and self.last_clipboard_content:
+            content_equal = current_content == self.last_clipboard_content
+            if not content_equal:
+                print(f"[App] 内容不同 - 当前长度={len(current_content)}, 上次长度={len(self.last_clipboard_content)}")
+                print(f"[App] 当前内容预览: {repr(current_content[:50])}")
+                print(f"[App] 上次内容预览: {repr(self.last_clipboard_content[:50])}")
+        elif not current_content:
+            print(f"[App] ⚠️ 当前剪贴板内容为空")
+        elif not self.last_clipboard_content:
+            print(f"[App] ℹ️ 这是第一次复制，记录内容（下次复制相同内容时触发）")
+        
+        # 检查是否应该触发 Kimi API
+        should_trigger = self._should_trigger_kimi(current_content, current_time)
+        
+        if should_trigger:
+            # 【防多弹窗】检查是否已有弹窗正在显示
+            if self._current_alert is not None:
+                print(f"[App] ⚠️ 已有弹窗正在显示，跳过本次触发")
+                self.last_clipboard_content = current_content
+                self.last_copy_time = current_time
+                return
+            
+            # 【防重复优化】立即更新触发状态，防止快速连续触发
+            self.last_triggered_content = current_content
+            self.last_triggered_time = current_time
+            
+            print(f"[App] ✓ 检测到连续两次复制相同内容，调用 Kimi API...")
+            print(f"[App] 内容预览: {current_content[:100]}...")
+            
+            # 调用 Kimi API 插件
+            from .plugins.kimi_api_plugin import execute as kimi_execute
+            success, msg, result = kimi_execute(current_content, "translate")
+            
+            if success:
+                print(f"[App] ✓ Kimi API 调用成功，结果显示弹窗")
+                if self.status_bar:
+                    self._current_alert = True
+                    try:
+                        self.status_bar.show_kimi_result_popup(current_content, result)
+                    finally:
+                        self._current_alert = None
+            else:
+                print(f"[App] ✗ Kimi API 调用失败: {msg}")
+                self._current_alert = None
+                if self.status_bar:
+                    self.status_bar.send_notification("Kimi API 调用失败", msg)
+        
+        # 更新记录
+        self.last_clipboard_content = current_content
+        self.last_copy_time = current_time
+    
     def applicationWillTerminate_(self, _):
-        """退出应用"""
+        """退出"""
         if self.event_tap:
             self.event_tap.stop()
         print("CommondX 已退出")
