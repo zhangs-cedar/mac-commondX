@@ -329,6 +329,15 @@ class CommondXApp(NSObject):
         # #endregion
         
         if should_trigger:
+            # 【防多弹窗】检查是否已有弹窗正在显示
+            if self._current_alert is not None:
+                print(f"[App] ⚠️ 已有弹窗正在显示，跳过本次触发")
+                return
+            
+            # 【防重复优化】立即更新触发状态，防止快速连续触发
+            self.last_triggered_content = current_content
+            self.last_triggered_time = current_time
+            
             print(f"[App] ✓ 检测到连续两次复制相同内容，调用 Kimi API...")
             print(f"[App] 内容预览: {current_content[:100]}...")
             
@@ -340,11 +349,13 @@ class CommondXApp(NSObject):
                 print(f"[App] ✓ Kimi API 调用成功，结果显示弹窗")
                 # 显示结果弹窗
                 if self.status_bar:
-                    self.status_bar.show_kimi_result_popup(current_content, result)
-                
-                # 记录触发信息，用于防重复
-                self.last_triggered_content = current_content
-                self.last_triggered_time = current_time
+                    # 标记弹窗正在显示
+                    self._current_alert = True
+                    try:
+                        self.status_bar.show_kimi_result_popup(current_content, result)
+                    finally:
+                        # 弹窗关闭后清除标记
+                        self._current_alert = None
                 
                 # #region agent log
                 try:
@@ -354,6 +365,8 @@ class CommondXApp(NSObject):
                 # #endregion
             else:
                 print(f"[App] ✗ Kimi API 调用失败: {msg}")
+                # API 调用失败时清除标记
+                self._current_alert = None
                 if self.status_bar:
                     self.status_bar.send_notification("Kimi API 调用失败", msg)
         else:
