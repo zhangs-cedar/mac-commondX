@@ -19,6 +19,7 @@ from .plugins.compress_plugin import execute as compress_execute
 from .plugins.decompress_plugin import execute as decompress_execute
 from .plugins.md_to_html_plugin import execute as md_to_html_execute
 from .plugins.open_terminal_plugin import execute as open_terminal_execute
+from .plugins.pdf_editor_plugin import execute as pdf_editor_execute
 
 # 配置文件路径（与许可证文件分离）- 从环境变量读取
 _config_path_str = os.getenv('CONFIG_PATH')
@@ -31,6 +32,7 @@ SMART_OPS_OPTIONS = {
     "md_to_html": {"title": "MD 转 HTML", "action": "smartMdToHtml:"},
     "copy_paths": {"title": "复制文件路径", "action": "smartCopyPaths:"},
     "open_terminal": {"title": "打开终端", "action": "smartOpenTerminal:"},
+    "pdf_editor": {"title": "PDF 编辑工具", "action": "smartPdfEditor:"},
 }
 
 # 文件类型定义
@@ -40,6 +42,7 @@ FILE_TYPES = {
     "image": {"name": "图片", "extensions": [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".webp", ".svg"]},
     "text": {"name": "文本文件", "extensions": [".txt", ".log", ".conf", ".config", ".ini", ".csv", ".tsv"]},
     "code": {"name": "代码文件", "extensions": [".py", ".js", ".ts", ".java", ".cpp", ".c", ".h", ".go", ".rs", ".swift"]},
+    "pdf": {"name": "PDF 文件", "extensions": [".pdf"]},
     "other": {"name": "其他", "extensions": []}  # 其他所有文件类型
 }
 
@@ -53,6 +56,7 @@ DEFAULT_SUPPORTED_TYPES = {
     "md_to_html": ["markdown"],  # MD转HTML仅支持Markdown
     "copy_paths": ALL_FILE_TYPES,  # 复制文件路径支持所有类型
     "open_terminal": ALL_FILE_TYPES,  # 打开终端支持所有类型
+    "pdf_editor": ["pdf"],  # PDF编辑工具仅支持PDF文件
 }
 
 
@@ -272,7 +276,7 @@ class StatusBarIcon(NSObject):
             file_path: 文件路径
             
         Returns:
-            str: 文件类型键（archive, markdown, image, text, code, other）
+            str: 文件类型键（archive, markdown, image, text, code, pdf, other）
         """
         print(f"[DEBUG] [StatusBar] 检测文件类型: {file_path}")
         try:
@@ -1408,6 +1412,19 @@ class StatusBarIcon(NSObject):
             return success, msg
         
         self._execute_smart_operation("打开终端", _open_terminal)
+    
+    @objc.IBAction
+    def smartPdfEditor_(self, sender):
+        """打开 PDF24 工具网页进行 PDF 编辑"""
+        def _pdf_editor(files):
+            success, msg, _ = pdf_editor_execute(files)
+            if success:
+                self.send_notification("✅ 已打开 PDF 工具", msg)
+            else:
+                self.send_notification("❌ 打开失败", msg)
+            return success, msg
+        
+        self._execute_smart_operation("PDF 编辑工具", _pdf_editor)
     
     @objc.IBAction
     def checkPermission_(self, sender):
