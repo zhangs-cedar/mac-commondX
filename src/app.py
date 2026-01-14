@@ -1,15 +1,7 @@
 #!/usr/bin/env python3
-"""
-CommondX 应用主逻辑 - 优化版
-
-主要改进：
-1. 增强了 ⌘+C 触发 AI 的稳定性，增加了内容清洗（strip）和长度校验。
-2. 增加了防抖锁，防止多次 API 调用导致弹窗堆叠。
-3. 优化了触发时间窗口，提升响应灵敏度。
-"""
-
 import time
 import objc
+import threading
 import traceback
 from Foundation import NSObject, NSTimer
 from AppKit import NSPasteboard, NSStringPboardType
@@ -19,39 +11,31 @@ from .event_tap import EventTap
 from .cut_manager import CutManager
 from .status_bar import StatusBarIcon
 from .license_manager import license_manager
-from .permission import check_accessibility, request_accessibility, open_accessibility_settings
+from .permission import check_accessibility, request_accessibility
 from .utils import get_clipboard_content
 
-
 class CommondXApp(NSObject):
-    """CommondX 应用代理"""
-    
     def init(self):
         self = objc.super(CommondXApp, self).init()
         if self:
             self.cut_manager = self.event_tap = self.status_bar = None
-            self._current_alert = None
             
-            # Kimi API 相关变量优化
+            # AI 触发相关状态
             self.last_clipboard_content = None
             self.last_copy_time = 0
-            self.COPY_INTERVAL = 5.0      # 最大间隔 5 秒
-            self.MIN_TRIGGER_INTERVAL = 0.2 # 最小间隔 0.2 秒，防止按键抖动
-            self.TRIGGER_COOLDOWN = 3.0   # 相同内容的冷却时间
             self.last_triggered_content = None
             self.last_triggered_time = 0
-            self._is_processing_kimi = False # API 处理锁
+            
+            # 配置项
+            self.COPY_INTERVAL = 5.0      # 5秒内双击触发
+            self.TRIGGER_COOLDOWN = 3.0   # 触发后冷却
+            self._is_processing_api = False # 线程锁
             
         return self
     
     def applicationDidFinishLaunching_(self, _):
-        """应用启动"""
-        print("CommondX 启动中...")
-        self.license_status, code, self.remaining = license_manager.get_status()
-        
         self.cut_manager = CutManager()
         self.status_bar = StatusBarIcon.alloc().initWithCutManager_(self.cut_manager)
-        
         self.event_tap = EventTap(
             on_cut=self.on_cut,
             on_paste=self.on_paste,
@@ -61,116 +45,84 @@ class CommondXApp(NSObject):
         self._try_start()
     
     def _try_start(self):
-        """尝试启动逻辑"""
         if check_accessibility():
-            return self._start_event_tap()
-        
+            return self.event_tap.start()
         request_accessibility()
-        self.status_bar.send_notification("需要授权", "请在系统设置中授权")
-        self._perm_count = 0
         NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
             2.0, self, "_checkPermission:", None, True
         )
     
     def _checkPermission_(self, timer):
-        """定时检查权限"""
-        self._perm_count += 1
         if check_accessibility():
             timer.invalidate()
-            self._start_event_tap()
-        elif self._perm_count >= 30:
-            timer.invalidate()
-    
-    def _start_event_tap(self):
-        """启动事件监听"""
-        if not self.event_tap.start():
-            self.status_bar.send_notification("启动失败", "请重启应用")
-            return
-        print("CommondX 已启动")
-    
-    def _on_license_invalid(self):
-        """许可证无效回调"""
-        self.status_bar.show_activation_required()
-
-    def _should_trigger_kimi(self, current_content, current_time):
-        """
-        核心逻辑优化：检查是否应该触发 Kimi API
-        """
-        if not current_content or not isinstance(current_content, str):
-            return False
-        
-        # 1. 清洗内容：去除首尾空格/换行，确保匹配率
-        curr_strip = current_content.strip()
-        last_strip = self.last_clipboard_content.strip() if self.last_clipboard_content else ""
-        
-        # 2. 长度校验：避免复制单个字符时误触
-        if len(curr_strip) < 2:
-            return False
-            
-        # 3. 时间间隔检查
-        time_diff = current_time - self.last_copy_time if self.last_copy_time > 0 else float('inf')
-        
-        # 4. 内容一致性检查
-        content_equal = (curr_strip == last_strip)
-        
-        # 5. 冷却逻辑检查
-        time_since_last_trigger = current_time - self.last_triggered_time if self.last_triggered_time > 0 else float('inf')
-        is_same_as_last_trigger = (curr_strip == (self.last_triggered_content.strip() if self.last_triggered_content else ""))
-        in_cooldown = is_same_as_last_trigger and time_since_last_trigger < self.TRIGGER_COOLDOWN
-        
-        # 触发条件：内容一致 AND 时间在有效窗口内 AND 未处于冷却 AND 当前未在处理
-        should_trigger = (
-            content_equal and 
-            self.MIN_TRIGGER_INTERVAL < time_diff < self.COPY_INTERVAL and
-            not in_cooldown and
-            not self._is_processing_kimi
-        )
-        
-        return should_trigger
+            self.event_tap.start()
 
     def on_copy(self):
-        """
-        ⌘+C 回调函数（全局监听优化版）
-        """
+        """⌘+C 回调处理"""
         try:
-            current_content = self._read_clipboard_content()
-            current_time = time.time()
-            
-            if not current_content:
-                return
+            # 读取剪贴板内容
+            content = self._read_clipboard_safe()
+            now = time.time()
+            if not content: return
 
-            if self._should_trigger_kimi(current_content, current_time):
-                # 开启防抖锁
-                self._is_processing_kimi = True
-                self.last_triggered_content = current_content
-                self.last_triggered_time = current_time
-                
-                print(f"[App] ✓ 检测到连续复制，调用 Kimi API...")
-                
-                # 调用插件
-                from .plugins.kimi_api_plugin import execute as kimi_execute
-                # 这里保持同步调用以确保 UI 响应顺序，如果网络极慢建议改用后台线程
-                success, msg, result = kimi_execute(current_content, "translate")
-                
-                if success:
-                    if self.status_bar:
-                        self.status_bar.show_kimi_result_popup(current_content, result)
-                else:
-                    print(f"[App] ✗ Kimi 调用失败: {msg}")
-                    self.status_bar.send_notification("Kimi 异常", msg)
-                
-                # 释放锁
-                self._is_processing_kimi = False
+            # 触发逻辑判断
+            if self._should_trigger(content, now):
+                # 开启异步线程处理 API，避免卡顿
+                thread = threading.Thread(target=self._call_ai_task, args=(content,))
+                thread.daemon = True
+                thread.start()
             
-            # 更新记录
-            self.last_clipboard_content = current_content
-            self.last_copy_time = current_time
+            self.last_clipboard_content = content
+            self.last_copy_time = now
             
         except Exception as e:
-            print(f"[ERROR] [App] on_copy 逻辑异常: {e}")
-            self._is_processing_kimi = False
-            traceback.print_exc()
+            print(f"on_copy error: {e}")
 
+    def _should_trigger(self, content, now):
+        if self._is_processing_api: return False
+        
+        c_strip = content.strip()
+        l_strip = self.last_clipboard_content.strip() if self.last_clipboard_content else ""
+        
+        if len(c_strip) < 2: return False # 太短不触发
+        
+        time_diff = now - self.last_copy_time
+        is_double_copy = (c_strip == l_strip) and (0.1 < time_diff < self.COPY_INTERVAL)
+        
+        # 冷却检查：防止对同一内容短时间内重复弹窗
+        is_cooling = (c_strip == (self.last_triggered_content or "").strip()) and \
+                     (now - self.last_triggered_time < self.TRIGGER_COOLDOWN)
+        
+        return is_double_copy and not is_cooling
+
+    def _call_ai_task(self, content):
+        """后台 API 任务"""
+        self._is_processing_api = True
+        self.last_triggered_content = content
+        self.last_triggered_time = time.time()
+        
+        from .plugins.kimi_api_plugin import execute
+        success, msg, result = execute(content, "translate")
+        
+        if success:
+            # 回到主线程弹出 UI
+            self.performSelectorOnMainThread_withObject_waitUntilDone_(
+                "showResult:", result, False
+            )
+        self._is_processing_api = False
+
+    @objc.signature(b'v@:@')
+    def showResult_(self, result):
+        if self.status_bar:
+            self.status_bar.show_kimi_result_popup(self.last_triggered_content, result)
+
+    def _read_clipboard_safe(self):
+        pb = NSPasteboard.generalPasteboard()
+        for _ in range(3): # 尝试 3 次解决系统同步延迟
+            res = pb.stringForType_(NSStringPboardType)
+            if res: return res
+            time.sleep(0.05)
+        return get_clipboard_content()
     def on_cut(self):
         """⌘+X 回调函数"""
         success, should_show_dialog = self.cut_manager.cut()
