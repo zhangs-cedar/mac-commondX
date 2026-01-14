@@ -11,14 +11,14 @@ Kimi API 兼容 OpenAI SDK，使用 moonshot 模型。
 - 图片：将图片转换为 base64 编码后处理
 """
 
-import yaml
+import os
 import requests
 import base64
 from pathlib import Path
-from cedar.utils import print
+from cedar.utils import print, load_config
 
-# 配置文件路径
-CONFIG_PATH = Path.home() / "Library/Application Support/CommondX/config.yaml"
+# 配置文件路径 - 从环境变量读取
+CONFIG_PATH = Path(os.getenv('CONFIG_PATH', str(Path.home() / "Library/Application Support/CommondX/config.yaml")))
 
 # Kimi API 基础 URL（Moonshot API）
 KIMI_API_BASE_URL = "https://api.moonshot.cn/v1/chat/completions"
@@ -202,7 +202,7 @@ def _get_api_key() -> str:
     print(f"[DEBUG] [KimiApiPlugin] 读取配置文件: {CONFIG_PATH}")
     try:
         if CONFIG_PATH.exists():
-            data = yaml.safe_load(CONFIG_PATH.read_text()) or {}
+            data = load_config(str(CONFIG_PATH)) or {}
             kimi_config = data.get('kimi_api', {})
             api_key =  kimi_config.get('api_key') # "sk-aI0vffmuixLWQGtIxqDsGjnzAnVebagCxRQJ7mjNggdT2bQv"
             if api_key:

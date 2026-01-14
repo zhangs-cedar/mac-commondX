@@ -2,7 +2,7 @@
 """状态栏图标"""
 
 import objc
-import yaml
+import os
 from pathlib import Path
 from Foundation import NSObject, NSTimer
 from AppKit import (
@@ -12,15 +12,15 @@ from AppKit import (
     NSFloatingWindowLevel, NSWindowCollectionBehaviorCanJoinAllSpaces,
     NSWindowCollectionBehaviorFullScreenAuxiliary
 )
-from cedar.utils import print
+from cedar.utils import print, load_config, write_config
 
 from .utils import copy_to_clipboard
 from .plugins.compress_plugin import execute as compress_execute
 from .plugins.decompress_plugin import execute as decompress_execute
 from .plugins.md_to_html_plugin import execute as md_to_html_execute
 
-# 配置文件路径（与许可证文件分离）
-CONFIG_PATH = Path.home() / "Library/Application Support/CommondX/config.yaml"
+# 配置文件路径（与许可证文件分离）- 从环境变量读取
+CONFIG_PATH = Path(os.getenv('CONFIG_PATH', str(Path.home() / "Library/Application Support/CommondX/config.yaml")))
 
 # 所有可用的智能操作选项
 SMART_OPS_OPTIONS = {
@@ -117,7 +117,7 @@ class StatusBarIcon(NSObject):
         print("[DEBUG] [StatusBar] 加载智能操作配置...")
         try:
             if CONFIG_PATH.exists():
-                data = yaml.safe_load(CONFIG_PATH.read_text()) or {}
+                data = load_config(str(CONFIG_PATH)) or {}
                 enabled = data.get('smart_ops', {})
                 print(f"[DEBUG] [StatusBar] 从配置文件读取: {enabled}")
                 
@@ -153,7 +153,7 @@ class StatusBarIcon(NSObject):
         print("[DEBUG] [StatusBar] 加载智能操作顺序配置...")
         try:
             if CONFIG_PATH.exists():
-                data = yaml.safe_load(CONFIG_PATH.read_text()) or {}
+                data = load_config(str(CONFIG_PATH)) or {}
                 order = data.get('smart_ops_order', [])
                 print(f"[DEBUG] [StatusBar] 从配置文件读取顺序: {order}")
                 
@@ -198,11 +198,11 @@ class StatusBarIcon(NSObject):
             # 读取现有配置（只包含配置相关字段）
             data = {}
             if CONFIG_PATH.exists():
-                data = yaml.safe_load(CONFIG_PATH.read_text()) or {}
+                data = load_config(str(CONFIG_PATH)) or {}
             
             # 更新顺序配置
             data['smart_ops_order'] = order
-            CONFIG_PATH.write_text(yaml.dump(data))
+            write_config(data, str(CONFIG_PATH))
             print(f"[DEBUG] [StatusBar] ✓ 顺序配置保存成功，共 {len(order)} 个选项")
         except Exception as e:
             print(f"[ERROR] [StatusBar] 保存顺序配置失败: {e}")
@@ -222,7 +222,7 @@ class StatusBarIcon(NSObject):
             # 读取现有配置（只包含配置相关字段）
             data = {}
             if CONFIG_PATH.exists():
-                data = yaml.safe_load(CONFIG_PATH.read_text()) or {}
+                data = load_config(str(CONFIG_PATH)) or {}
                 print(f"[DEBUG] [StatusBar] 读取现有配置: {list(data.keys())}")
             
             # 更新配置相关字段
@@ -230,7 +230,7 @@ class StatusBarIcon(NSObject):
             # 同时保存顺序配置（如果存在）
             if hasattr(self, 'ops_order') and self.ops_order:
                 data['smart_ops_order'] = self.ops_order
-            CONFIG_PATH.write_text(yaml.dump(data))
+            write_config(data, str(CONFIG_PATH))
             print(f"[DEBUG] [StatusBar] ✓ 配置保存成功，共 {len(enabled)} 个选项")
         except Exception as e:
             print(f"[ERROR] [StatusBar] 保存配置失败: {e}")
@@ -683,7 +683,7 @@ class StatusBarIcon(NSObject):
         current_key = None
         try:
             if CONFIG_PATH.exists():
-                data = yaml.safe_load(CONFIG_PATH.read_text()) or {}
+                data = load_config(str(CONFIG_PATH)) or {}
                 kimi_config = data.get('kimi_api', {})
                 current_key = kimi_config.get('api_key')
         except Exception as e:
@@ -712,7 +712,7 @@ class StatusBarIcon(NSObject):
                 # 读取现有配置
                 data = {}
                 if CONFIG_PATH.exists():
-                    data = yaml.safe_load(CONFIG_PATH.read_text()) or {}
+                    data = load_config(str(CONFIG_PATH)) or {}
                 
                 # 更新 kimi_api 配置
                 if 'kimi_api' not in data:
@@ -720,7 +720,7 @@ class StatusBarIcon(NSObject):
                 data['kimi_api']['api_key'] = api_key
                 
                 # 保存配置文件
-                CONFIG_PATH.write_text(yaml.dump(data))
+                write_config(data, str(CONFIG_PATH))
                 print(f"[DEBUG] [StatusBar] ✓ API Key 已保存（长度={len(api_key)}）")
                 self.send_notification("✅ 保存成功", f"Kimi API Key 已保存（长度: {len(api_key)}）")
             except Exception as e:
@@ -1130,7 +1130,7 @@ class StatusBarIcon(NSObject):
                     'smart_ops': {key: True for key in SMART_OPS_OPTIONS.keys()},
                     'smart_ops_order': list(SMART_OPS_OPTIONS.keys())
                 }
-                CONFIG_PATH.write_text(yaml.dump(default_config))
+                write_config(default_config, str(CONFIG_PATH))
                 print(f"[DEBUG] [StatusBar] 创建默认配置文件: {CONFIG_PATH}（仅配置字段）")
             
             # 使用系统默认编辑器打开文件

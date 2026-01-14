@@ -1,34 +1,36 @@
 #!/usr/bin/env python3
 """许可证管理 - 机器码生成、激活码验证、试用期管理"""
 
+import os
 import subprocess
 import hashlib
 import time
-import yaml
 from pathlib import Path
-from cedar.utils import print, create_name
+from cedar.utils import print, create_name, load_config, write_config
 TRIAL_DAYS = 21  # 初始试用期21天
 ACTIVATION_DAYS = 365  # 每次激活码激活延长1年（365天）
 EXTEND_DAYS = 7  # 每次延长7天
 EXTEND_INTERVAL_DAYS = 7  # 每7天可以延长一次
 DAY_SECS = 86400
 
-# 许可证文件路径（与配置文件分离）
-LICENSE_PATH = Path.home() / "Library/Application Support/CommondX/license.yaml"
+# 许可证文件路径（与配置文件分离）- 从环境变量读取
+LICENSE_PATH = Path(os.getenv('LICENSE_PATH', str(Path.home() / "Library/Application Support/CommondX/license.yaml")))
 LICENSE_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 def _load() -> dict:
     """加载许可证数据"""
     try:
-        return yaml.safe_load(LICENSE_PATH.read_text()) or {} if LICENSE_PATH.exists() else {}
+        if LICENSE_PATH.exists():
+            return load_config(str(LICENSE_PATH)) or {}
+        return {}
     except:
         return {}
 
 
 def _save(data: dict):
     """保存许可证数据到新文件"""
-    LICENSE_PATH.write_text(yaml.dump(data))
+    write_config(data, str(LICENSE_PATH))
 
 
 class LicenseManager:
