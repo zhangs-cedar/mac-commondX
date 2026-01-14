@@ -628,10 +628,6 @@ class StatusBarIcon(NSObject):
         menu.addItem_(activation_item)
         print("[DEBUG] [StatusBar] ✓ 激活/购买子菜单已添加")
         
-        # 如果可以延长试用期，在许可信息区域显示延长选项
-        if license_manager.can_extend_trial():
-            _add_menu_item(menu, self, "延长试用期（7天）", "extendTrial:")
-
         menu.addItem_(NSMenuItem.separatorItem())
         
         # 【步骤 2】功能区
@@ -1523,8 +1519,6 @@ class StatusBarIcon(NSObject):
                 about_text += "\n💡 已使用激活码延长"
         else:
             about_text += "\n\n⚠️ 试用期已结束"
-            if license_manager.can_extend_trial():
-                about_text += "\n💡 可延长试用期7天"
         
         # 使用通用方法显示对话框
         response = self._show_alert_common(
@@ -1541,24 +1535,6 @@ class StatusBarIcon(NSObject):
             website_url = "https://github.com/zhangs-cedar/mac-commondX"
             NSWorkspace.sharedWorkspace().openURL_(NSURL.URLWithString_(website_url))
             print(f"[DEBUG] [StatusBar] 打开官网: {website_url}")
-    
-    @objc.IBAction
-    def extendTrial_(self, sender):
-        """延长试用期7天"""
-        from .license_manager import license_manager
-        
-        if not license_manager.can_extend_trial():
-            self.send_notification("⏰ 提示", "距离上次延长不足7天，无法延长")
-            return
-        
-        success = license_manager.extend_trial()
-        if success:
-            rem = license_manager.remaining_days()
-            self.send_notification("✅ 延长成功", f"试用期已延长7天，剩余 {rem} 天")
-            # 刷新菜单（更新许可证状态显示）
-            self.setup_menu()
-        else:
-            self.send_notification("❌ 延长失败", "无法延长试用期")
     
     @objc.IBAction
     def quit_(self, sender):
