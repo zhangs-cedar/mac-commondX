@@ -12,9 +12,10 @@ Kimi API 兼容 OpenAI SDK，使用 moonshot 模型。
 """
 
 import os
-import requests
 import base64
+import tempfile
 from pathlib import Path
+from openai import OpenAI
 from cedar.utils import print, load_config
 
 # 配置文件路径 - 从环境变量读取
@@ -22,7 +23,7 @@ _config_path_str = os.getenv('CONFIG_PATH')
 CONFIG_PATH = Path(_config_path_str)
 
 # Kimi API 基础 URL（Moonshot API）
-KIMI_API_BASE_URL = "https://api.moonshot.cn/v1/chat/completions"
+KIMI_API_BASE_URL = "https://api.moonshot.cn/v1"
 
 # 支持的文本文件扩展名
 TEXT_FILE_EXTENSIONS = {'.txt', '.md', '.py', '.js', '.ts', '.java', '.cpp', '.c', '.h', 
@@ -205,7 +206,7 @@ def _get_api_key() -> str:
         if CONFIG_PATH.exists():
             data = load_config(str(CONFIG_PATH)) or {}
             kimi_config = data.get('kimi_api', {})
-            api_key =  kimi_config.get('api_key') # "sk-aI0vffmuixLWQGtIxqDsGjnzAnVebagCxRQJ7mjNggdT2bQv"
+            api_key = kimi_config.get('api_key')
             if api_key:
                 print(f"[DEBUG] [KimiApiPlugin] ✓ API Key 已读取（长度={len(api_key)}）")
                 return api_key
@@ -218,6 +219,69 @@ def _get_api_key() -> str:
     except Exception as e:
         print(f"[ERROR] [KimiApiPlugin] 读取配置失败: {e}")
         return None
+
+
+def _get_client() -> 'OpenAI':
+    """
+    创建 OpenAI 客户端实例（使用 Moonshot API）
+    
+    Returns:
+        OpenAI: 客户端实例，如果 API Key 未配置返回 None
+    """
+    print(f"[DEBUG] [KimiApiPlugin] 创建 OpenAI 客户端...")
+    api_key = _get_api_key()
+    if not api_key:
+        print(f"[ERROR] [KimiApiPlugin] API Key 未配置，无法创建客户端")
+        return None
+    
+    try:
+        client = OpenAI(
+            api_key=api_key,
+            base_url=f"{KIMI_API_BASE_URL}",
+        )
+        print(f"[DEBUG] [KimiApiPlugin] ✓ OpenAI 客户端已创建")
+        return client
+    except Exception as e:
+        print(f"[ERROR] [KimiApiPlugin] 创建客户端失败: {e}")
+        return None
+
+
+def _get_system_messages() -> list:
+    """
+    获取 system messages（Kimi 角色描述）
+    
+    Returns:
+        list: system messages 列表
+    """
+    return [
+        {
+            "role": "system",
+            "content": "你是 Kimi，由 Moonshot AI 提供的人工智能助手，你更擅长中文和英文的对话。你会为用户提供安全，有帮助，准确的回答。同时，你会拒绝一切涉及恐怖主义，种族歧视，黄色暴力等问题的回答。Moonshot AI 为专有名词，不可翻译成其他语言。",
+        }
+    ]
+
+
+def _select_model(content_type: str, file_type: str = None) -> str:
+    """
+    根据内容类型自动选择模型
+    
+    Args:
+        content_type: 内容类型（text/file/image）
+        file_type: 文件类型（text/image/binary，仅当 content_type=file 时有效）
+    
+    Returns:
+        str: 模型名称
+    """
+    # 复杂文件/图片使用 kimi-k2-turbo-preview
+    if content_type == "image" or (content_type == "file" and file_type in ["image", "binary"]):
+        model = "kimi-k2-turbo-preview"
+        print(f"[DEBUG] [KimiApiPlugin] 选择模型: {model} (复杂内容)")
+    else:
+        # 文本/简单文件使用 moonshot-v1-8k
+        model = "moonshot-v1-8k"
+        print(f"[DEBUG] [KimiApiPlugin] 选择模型: {model} (简单内容)")
+    
+    return model
 
 
 def execute_from_clipboard(action: str = "translate") -> tuple:
@@ -329,6 +393,8 @@ def execute(content, action: str = "translate", content_type: str = None) -> tup
     """
     调用 Kimi API 处理内容（支持文本、文件、图片）
     
+    使用 OpenAI SDK 和文件上传 API，支持 PDF、DOC、图片 OCR 等高级功能。
+    
     Args:
         content: 要处理的内容，可以是：
             - str: 文本内容或文件路径
@@ -365,26 +431,29 @@ def execute(content, action: str = "translate", content_type: str = None) -> tup
         elif isinstance(content, list):
             content_type = "file"
             print(f"[DEBUG] [KimiApiPlugin] 检测到文件路径列表")
-        elif hasattr(content, 'bytes') or isinstance(content, bytes):
+        elif hasattr(content, 'bytes') or isinstance(content, bytes) or (isinstance(content, tuple) and len(content) == 2):
             content_type = "image"
             print(f"[DEBUG] [KimiApiPlugin] 检测到图片数据")
         else:
             print(f"[ERROR] [KimiApiPlugin] 无法识别内容类型: {type(content)}")
             return False, f"不支持的内容类型: {type(content)}", None
     
+    # 创建客户端
+    client = _get_client()
+    if not client:
+        return False, "Kimi API Key 未配置，请在配置文件中设置 kimi_api.api_key", None
+    
     # 根据内容类型处理
-    processed_content = None
-    content_info = ""
-    file_type = None  # 用于记录文件类型
+    file_type = None
+    file_path = None
+    file_object = None
     
     if content_type == "text":
         print(f"[DEBUG] [KimiApiPlugin] 处理文本内容，长度={len(content)}")
         if not content or not content.strip():
             print(f"[ERROR] [KimiApiPlugin] 文本内容为空")
             return False, "文本内容为空", None
-        processed_content = content
-        content_info = f"文本内容（{len(content)} 字符）"
-        print(f"[DEBUG] [KimiApiPlugin] 文本内容预览: {content}...")
+        print(f"[DEBUG] [KimiApiPlugin] 文本内容预览: {content[:100]}...")
     
     elif content_type == "file":
         print(f"[DEBUG] [KimiApiPlugin] 处理文件内容...")
@@ -398,150 +467,190 @@ def execute(content, action: str = "translate", content_type: str = None) -> tup
         else:
             file_path = content
         
-        success, file_content, file_type, error_msg = read_file_content(file_path)
-        if not success:
-            return False, error_msg, None
+        file_path = Path(file_path)
+        if not file_path.exists() or not file_path.is_file():
+            return False, f"文件不存在: {file_path}", None
         
-        processed_content = file_content
-        if file_type == "image":
-            content_info = f"图片文件（base64 编码，{len(file_content)} 字符）"
-            # 对于图片，默认使用 analyze 动作
-            if action == "translate":
-                action = "analyze"
-                print(f"[DEBUG] [KimiApiPlugin] 图片文件自动切换为 analyze 动作")
-        elif file_type == "text":
-            content_info = f"文本文件（{len(file_content)} 字符）"
+        # 检测文件类型
+        ext = file_path.suffix.lower()
+        image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp', '.svg'}
+        if ext in image_extensions:
+            file_type = "image"
+        elif ext in TEXT_FILE_EXTENSIONS or not ext:
+            file_type = "text"
         else:
-            content_info = f"文件（base64 编码，{len(file_content)} 字符）"
+            file_type = "binary"
+        
+        print(f"[DEBUG] [KimiApiPlugin] 文件类型: {file_type}, 扩展名: {ext}")
+        
+        # 使用文件上传 API
+        try:
+            print(f"[DEBUG] [KimiApiPlugin] 上传文件到 Moonshot API...")
+            file_object = client.files.create(
+                file=file_path,
+                purpose="file-extract"
+            )
+            print(f"[DEBUG] [KimiApiPlugin] ✓ 文件已上传，file_id: {file_object.id}")
+            
+            # 获取文件内容
+            print(f"[DEBUG] [KimiApiPlugin] 获取文件内容...")
+            file_content = client.files.content(file_id=file_object.id).text
+            print(f"[DEBUG] [KimiApiPlugin] ✓ 文件内容已获取，长度: {len(file_content)} 字符")
+        except Exception as e:
+            print(f"[ERROR] [KimiApiPlugin] 文件上传失败: {e}")
+            import traceback
+            print(traceback.format_exc())
+            return False, f"文件上传失败: {str(e)}", None
     
     elif content_type == "image":
         print(f"[DEBUG] [KimiApiPlugin] 处理图片数据...")
-        # 获取图片类型
+        # 获取图片类型和数据
         image_type = "PNG"  # 默认
         if isinstance(content, tuple) and len(content) == 2:
             image_data, image_type = content
         else:
             image_data = content
         
-        success, base64_data, error_msg = process_image_data(image_data, image_type)
-        if not success:
-            return False, error_msg, None
-        
-        processed_content = base64_data
-        content_info = f"图片数据（{image_type} 格式，base64 编码，{len(base64_data)} 字符）"
-        # 对于图片，默认使用 analyze 动作
-        if action == "translate":
-            action = "analyze"
-            print(f"[DEBUG] [KimiApiPlugin] 图片数据自动切换为 analyze 动作")
+        # 将图片数据保存为临时文件
+        tmp_file_path = None
+        try:
+            # 转换 NSData 为 bytes
+            if hasattr(image_data, 'bytes'):
+                image_bytes = bytes(image_data.bytes())
+            elif isinstance(image_data, bytes):
+                image_bytes = image_data
+            else:
+                return False, f"不支持的图片数据类型: {type(image_data)}", None
+            
+            # 创建临时文件
+            suffix = ".png" if image_type == "PNG" else ".tiff"
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
+                tmp_file.write(image_bytes)
+                tmp_file_path = Path(tmp_file.name)
+            
+            print(f"[DEBUG] [KimiApiPlugin] 图片已保存到临时文件: {tmp_file_path}")
+            
+            # 使用文件上传 API
+            print(f"[DEBUG] [KimiApiPlugin] 上传图片到 Moonshot API...")
+            file_object = client.files.create(
+                file=tmp_file_path,
+                purpose="file-extract"
+            )
+            print(f"[DEBUG] [KimiApiPlugin] ✓ 图片已上传，file_id: {file_object.id}")
+            
+            # 获取文件内容
+            print(f"[DEBUG] [KimiApiPlugin] 获取图片内容...")
+            file_content = client.files.content(file_id=file_object.id).text
+            print(f"[DEBUG] [KimiApiPlugin] ✓ 图片内容已获取，长度: {len(file_content)} 字符")
+            
+            file_type = "image"
+            file_path = tmp_file_path  # 用于后续清理
+        except Exception as e:
+            print(f"[ERROR] [KimiApiPlugin] 图片处理失败: {e}")
+            import traceback
+            print(traceback.format_exc())
+            # 清理临时文件
+            if tmp_file_path and tmp_file_path.exists():
+                try:
+                    tmp_file_path.unlink()
+                    print(f"[DEBUG] [KimiApiPlugin] 临时文件已清理（错误时）")
+                except:
+                    pass
+            return False, f"图片处理失败: {str(e)}", None
     
     else:
         print(f"[ERROR] [KimiApiPlugin] 不支持的内容类型: {content_type}")
         return False, f"不支持的内容类型: {content_type}", None
     
-    print(f"[DEBUG] [KimiApiPlugin] 内容处理完成: {content_info}")
+    # 选择模型
+    model = _select_model(content_type, file_type)
     
-    # 读取 API Key
-    api_key = _get_api_key()
-    if not api_key:
-        print(f"[ERROR] [KimiApiPlugin] API Key 未配置")
-        return False, "Kimi API Key 未配置，请在配置文件中设置 kimi_api.api_key", None
+    # 构建 messages
+    messages = _get_system_messages()
     
-    # 根据 action 和内容类型构建提示词
-    if content_type == "image" or (content_type == "file" and file_type == "image"):
-        # 图片相关提示词
-        prompts = {
-            "analyze": "请分析以下图片内容，用中文详细描述图片中的内容、场景、对象等信息：\n\n",
-            "explain": "请解释以下图片内容，用简洁明了的中文说明图片的含义和主要内容：\n\n",
-            "translate": "请分析以下图片内容，用中文详细描述：\n\n",
-        }
-        prompt = prompts.get(action, prompts["analyze"])
-        user_message = prompt + f"[图片数据 base64 编码，共 {len(processed_content)} 字符]\n\n注意：这是一个 base64 编码的图片数据，请根据数据内容进行分析。"
-    elif content_type == "file" and file_type == "binary":
-        # 二进制文件提示词
-        prompts = {
-            "analyze": "请分析以下文件内容（base64 编码），用中文说明文件类型和可能的内容：\n\n",
-            "explain": "请解释以下文件内容（base64 编码），用简洁明了的中文说明：\n\n",
-            "translate": "请分析以下文件内容（base64 编码）：\n\n",
-        }
-        prompt = prompts.get(action, prompts["analyze"])
-        user_message = prompt + f"[文件数据 base64 编码，共 {len(processed_content)} 字符]"
-    else:
-        # 文本相关提示词
-        prompts = {
-            "translate": "请将以下文本翻译成中文，保持原意和语气，如果已经是中文则翻译成英文：\n\n",
-            "explain": "请解释以下内容，用简洁明了的中文说明：\n\n",
-            "summarize": "请总结以下内容，用简洁的中文概括要点：\n\n",
-            "analyze": "请分析以下内容，用中文详细说明：\n\n",
-        }
+    # 如果有文件内容，添加为 system message
+    if file_object and file_content:
+        messages.append({
+            "role": "system",
+            "content": file_content,
+        })
+        print(f"[DEBUG] [KimiApiPlugin] 文件内容已添加到 system message")
+    
+    # 根据 action 构建 user message
+    prompts = {
+        "translate": "请将以下文本翻译成中文，保持原意和语气，如果已经是中文则翻译成英文：\n\n",
+        "explain": "请解释以下内容，用简洁明了的中文说明：\n\n",
+        "summarize": "请总结以下内容，用简洁的中文概括要点：\n\n",
+        "analyze": "请分析以下内容，用中文详细说明：\n\n",
+    }
+    
+    if content_type == "text":
         prompt = prompts.get(action, prompts["translate"])
-        user_message = prompt + processed_content
+        user_message = prompt + content
+    elif content_type == "file" or content_type == "image":
+        # 对于文件/图片，根据 action 调整提示词
+        if file_type == "image":
+            if action == "translate":
+                action = "analyze"
+            prompts = {
+                "analyze": "请分析以下图片内容，用中文详细描述图片中的内容、场景、对象等信息。",
+                "explain": "请解释以下图片内容，用简洁明了的中文说明图片的含义和主要内容。",
+            }
+        else:
+            prompts = {
+                "analyze": "请分析以下文件内容，用中文详细说明。",
+                "explain": "请解释以下文件内容，用简洁明了的中文说明。",
+                "summarize": "请总结以下文件内容，用简洁的中文概括要点。",
+                "translate": "请将以下文件内容翻译成中文，保持原意和语气。",
+            }
+        prompt = prompts.get(action, prompts.get("analyze", "请分析以下内容："))
+        user_message = prompt
+    else:
+        user_message = prompts.get(action, prompts["translate"])
     
-    print(f"[DEBUG] [KimiApiPlugin] 构建提示词完成，开始调用 API...")
+    messages.append({
+        "role": "user",
+        "content": user_message
+    })
+    
+    print(f"[DEBUG] [KimiApiPlugin] 构建 messages 完成，开始调用 API...")
+    print(f"[DEBUG] [KimiApiPlugin] 使用模型: {model}, action: {action}")
     
     try:
-        # 调用 Kimi API（兼容 OpenAI 格式）
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        
-        payload = {
-            "model": "moonshot-v1-8k",  # Kimi 模型
-            "messages": [
-                {
-                    "role": "user",
-                    "content": user_message
-                }
-            ],
-            "temperature": 0.3,
-            "max_tokens": 2000
-        }
-        
-        print(f"[DEBUG] [KimiApiPlugin] 发送 API 请求到: {KIMI_API_BASE_URL}")
-        response = requests.post(
-            KIMI_API_BASE_URL,
-            json=payload,
-            headers=headers,
-            timeout=30
+        # 调用 API
+        completion = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=0.6,
         )
         
-        print(f"[DEBUG] [KimiApiPlugin] API 响应状态码: {response.status_code}")
+        result_text = completion.choices[0].message.content
+        print(f"[DEBUG] [KimiApiPlugin] ✓ API 调用成功，结果长度={len(result_text)}")
         
-        if response.status_code == 200:
-            result_data = response.json()
-            print(f"[DEBUG] [KimiApiPlugin] API 响应成功")
-            
-            # 提取返回内容
-            if "choices" in result_data and len(result_data["choices"]) > 0:
-                result_text = result_data["choices"][0]["message"]["content"]
-                print(f"[DEBUG] [KimiApiPlugin] ✓ API 调用成功，结果长度={len(result_text)}")
-                return True, "处理成功", result_text
-            else:
-                print(f"[ERROR] [KimiApiPlugin] API 响应格式异常: {result_data}")
-                return False, "API 响应格式异常", None
-        else:
-            error_msg = f"API 调用失败（状态码: {response.status_code}）"
+        # 清理临时文件（如果是图片）
+        if content_type == "image" and file_path and file_path.exists():
             try:
-                error_data = response.json()
-                error_detail = error_data.get("error", {}).get("message", str(error_data))
-                error_msg += f": {error_detail}"
+                file_path.unlink()
+                print(f"[DEBUG] [KimiApiPlugin] 临时文件已清理（成功时）")
             except:
-                error_msg += f": {response.text[:200]}"
-            
-            print(f"[ERROR] [KimiApiPlugin] {error_msg}")
-            return False, error_msg, None
-            
-    except requests.exceptions.Timeout:
-        print(f"[ERROR] [KimiApiPlugin] API 调用超时")
-        return False, "API 调用超时，请检查网络连接", None
-    except requests.exceptions.RequestException as e:
-        print(f"[ERROR] [KimiApiPlugin] API 请求异常: {e}")
-        return False, f"API 请求失败: {str(e)}", None
+                pass
+        
+        return True, "处理成功", result_text
+        
     except Exception as e:
-        print(f"[ERROR] [KimiApiPlugin] 处理异常: {e}")
+        print(f"[ERROR] [KimiApiPlugin] API 调用失败: {e}")
         import traceback
         print(traceback.format_exc())
-        return False, f"处理失败: {str(e)}", None
+        
+        # 清理临时文件（如果是图片）
+        if content_type == "image" and file_path and file_path.exists():
+            try:
+                file_path.unlink()
+                print(f"[DEBUG] [KimiApiPlugin] 临时文件已清理（错误时）")
+            except:
+                pass
+        
+        return False, f"API 调用失败: {str(e)}", None
 
 
 if __name__ == "__main__":

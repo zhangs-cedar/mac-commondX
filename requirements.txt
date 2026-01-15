@@ -14,6 +14,8 @@ pyinstaller>=6.0
 # ==================== 可选功能依赖 ====================
 # HTTP 请求库（Kimi API 调用）
 requests>=2.31.0
+# OpenAI SDK（Kimi/Moonshot API 调用，推荐使用）
+openai>=1.0.0
 # MD 转 HTML/PDF/图片功能（代码中有降级处理，未安装时使用简单转换）
 markdown>=3.0
 weasyprint>=60.0  # PDF 转换工具（纯 Python）
