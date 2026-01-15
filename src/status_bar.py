@@ -20,6 +20,7 @@ from .plugins.decompress_plugin import execute as decompress_execute
 from .plugins.md_to_html_plugin import execute as md_to_html_execute
 from .plugins.open_terminal_plugin import execute as open_terminal_execute
 from .plugins.pdf_editor_plugin import execute as pdf_editor_execute
+from .plugins.kimi_api_plugin import execute as kimi_api_execute
 
 # 配置文件路径（与许可证文件分离）- 从环境变量读取
 _config_path_str = os.getenv('CONFIG_PATH')
@@ -33,6 +34,7 @@ SMART_OPS_OPTIONS = {
     "copy_paths": {"title": "复制文件路径", "action": "smartCopyPaths:"},
     "open_terminal": {"title": "打开终端", "action": "smartOpenTerminal:"},
     "pdf_editor": {"title": "PDF WORD 等在线免费转化工具", "action": "smartPdfEditor:"},
+    "kimi_ai": {"title": "KIMI AI工具", "action": "smartKimiAi:"},
 }
 
 # 文件类型定义
@@ -58,6 +60,7 @@ DEFAULT_SUPPORTED_TYPES = {
     "copy_paths": ALL_FILE_TYPES,  # 复制文件路径支持所有类型
     "open_terminal": ALL_FILE_TYPES,  # 打开终端支持所有类型
     "pdf_editor": ["pdf", "document"],  # PDF WORD 等在线免费转化工具支持 PDF 和 Office 文档
+    "kimi_ai": ["markdown", "image", "text", "code", "pdf", "document"],  # KIMI AI工具支持多种文件类型
 }
 
 
@@ -1457,6 +1460,32 @@ class StatusBarIcon(NSObject):
             return success, msg
         
         self._execute_smart_operation("PDF WORD 等在线免费转化工具", _pdf_editor)
+    
+    @objc.IBAction
+    def smartKimiAi_(self, sender):
+        """KIMI AI工具：调用 Kimi API 处理文件"""
+        def _kimi_ai(files):
+            print(f"[DEBUG] [StatusBar] KIMI AI工具处理文件: {len(files)} 个文件")
+            # 只处理第一个文件
+            if not files:
+                return False, "未选择文件", None
+            
+            file_path = files[0]
+            print(f"[DEBUG] [StatusBar] 处理文件: {file_path}")
+            
+            # 调用 Kimi API 处理文件（默认使用 analyze 动作）
+            success, msg, result = kimi_api_execute(file_path, "analyze", "file")
+            
+            if success and result:
+                # 显示结果弹窗
+                self.show_kimi_result_popup(f"文件: {Path(file_path).name}", result)
+                self.send_notification("✅ AI 处理成功", "Kimi API 处理完成")
+            else:
+                self.send_notification("❌ AI 处理失败", msg or "处理失败")
+            
+            return success, msg
+        
+        self._execute_smart_operation("KIMI AI工具", _kimi_ai)
     
     @objc.IBAction
     def checkPermission_(self, sender):
