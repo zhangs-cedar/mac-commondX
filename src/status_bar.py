@@ -592,16 +592,16 @@ class StatusBarIcon(NSObject):
         print(f"[DEBUG] [StatusBar] 添加许可信息区域 - status={status}")
         from .license_manager import license_manager
         
-        # 显示许可证状态（激活码激活延长1年，显示剩余天数）
-        if status == "trial":
-            title = f"试用期 (剩余 {remaining} 天)"
-            _add_menu_item(menu, self, title, enabled=False)
-        else:
-            # 已过期
-            _add_menu_item(menu, self, "⚠ 试用期已结束", enabled=False)
-        
         # 创建"激活 / 购买"子菜单
         activation_menu = NSMenu.alloc().init()
+        
+        # 显示许可证状态（激活码激活延长1年，显示剩余天数）- 移到子菜单中，降低对用户的干扰
+        if status == "trial":
+            title = f"试用期 (剩余 {remaining} 天)"
+            _add_menu_item(activation_menu, self, title, enabled=False)
+        else:
+            # 已过期
+            _add_menu_item(activation_menu, self, "⚠ 试用期已结束", enabled=False)
         
         # 机器码显示（禁用项，仅显示）
         machine_code_title = f"机器码: {license_manager.machine_code}"
@@ -684,10 +684,6 @@ class StatusBarIcon(NSObject):
             _add_menu_item(menu, self, "已获得系统权限", enabled=False)
         else:
             _add_menu_item(menu, self, "未获得系统权限 (点击授权)", "checkPermission:")
-        
-        self.autostart_item = _add_menu_item(menu, self, "开机自启", "toggleAutostart:")
-        self.autostart_item.setState_(1 if self._is_autostart_enabled() else 0)
-        print(f"[DEBUG] [StatusBar] 开机自启状态: {self.autostart_item.state() == 1}")
         
         menu.addItem_(NSMenuItem.separatorItem())
         
@@ -1483,20 +1479,6 @@ class StatusBarIcon(NSObject):
     def openAccessibilitySettings_(self, sender):
         from .permission import open_accessibility_settings
         open_accessibility_settings()
-    
-    @objc.IBAction
-    def toggleAutostart_(self, sender):
-        from .launch_agent import toggle_autostart
-        enabled = toggle_autostart()
-        self.autostart_item.setState_(1 if enabled else 0)
-        self.send_notification("⚙️ 开机自启", "✅ 已开启" if enabled else "❌ 已关闭")
-    
-    def _is_autostart_enabled(self):
-        try:
-            from .launch_agent import is_autostart_enabled
-            return is_autostart_enabled()
-        except:
-            return False
     
     @objc.IBAction
     def openConfigFile_(self, sender):
