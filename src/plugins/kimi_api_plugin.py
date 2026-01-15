@@ -675,38 +675,4 @@ def execute(content, action: str = "translate", content_type: str = None) -> tup
         return False, f"API 调用失败: {str(e)}", None
 
 
-if __name__ == "__main__":
-    """测试代码"""
-    print("=" * 60)
-    print("[TEST] 测试 Kimi API 插件")
-    print("=" * 60)
-    print()
-    
-    # 测试1: 文本处理
-    print("[TEST 1] 测试文本处理...")
-    test_text = "Hello, world! This is a test."
-    print(f"[TEST 1] 测试文本: {test_text}")
-    success, msg, result = execute(test_text, "translate")
-    print(f"[TEST 1] 转换结果: {msg}")
-    if success:
-        print(f"[TEST 1] ✓ 测试通过，结果: {result}")
-    else:
-        print(f"[TEST 1] ✗ 测试失败: {msg}")
-    print()
-    
-    # 测试2: 从剪贴板获取内容并处理
-    print("[TEST 2] 测试从剪贴板获取内容并处理...")
-    print("[TEST 2] 请确保剪贴板中有内容（文本/文件/图片）")
-    success, msg, result = execute_from_clipboard("analyze")
-    print(f"[TEST 2] 处理结果: {msg}")
-    if success:
-        print(f"[TEST 2] ✓ 测试通过，结果: {result}")
-    else:
-        print(f"[TEST 2] ✗ 测试失败: {msg}")
-    print()
-    
-    print("=" * 60)
-    print("测试完成")
-    print("=" * 60)
-
 
