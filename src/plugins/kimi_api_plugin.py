@@ -7,12 +7,11 @@ Kimi API 兼容 OpenAI SDK，使用 moonshot 模型。
 
 支持处理多种类型的输入：
 - 文本：直接处理文本内容
-- 文件：读取文件内容并处理
-- 图片：将图片转换为 base64 编码后处理
+- 文件：使用文件上传 API 处理（支持 PDF、DOC、图片 OCR 等）
+- 图片：使用文件上传 API 处理
 """
 
 import os
-import base64
 import tempfile
 from pathlib import Path
 from openai import OpenAI
@@ -24,6 +23,7 @@ CONFIG_PATH = Path(_config_path_str)
 
 # Kimi API 基础 URL（Moonshot API）
 KIMI_API_BASE_URL = "https://api.moonshot.cn/v1"
+# https://platform.moonshot.cn/docs/api/files
 
 # 支持的文本文件扩展名
 TEXT_FILE_EXTENSIONS = {'.txt', '.md', '.py', '.js', '.ts', '.java', '.cpp', '.c', '.h', 
