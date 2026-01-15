@@ -830,8 +830,8 @@ class StatusBarIcon(NSObject):
         
         # 【步骤 3】添加分隔线和 API Key 输入、编辑配置文件选项
         menu.addItem_(NSMenuItem.separatorItem())
-        _add_menu_item(menu, self, "🔑 输入 API Key", "showKimiApiKeyInput:")
-        print("[DEBUG] [StatusBar] 已添加输入 API Key 选项")
+        _add_menu_item(menu, self, "🔑 输入 KIMI API Key", "showKimiApiKeyInput:")
+        print("[DEBUG] [StatusBar] 已添加输入 KIMI API Key 选项")
         _add_menu_item(menu, self, "📝 编辑配置文件", "openConfigFile:")
         print("[DEBUG] [StatusBar] 已添加编辑配置文件选项")
         
