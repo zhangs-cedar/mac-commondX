@@ -588,7 +588,34 @@ class StatusBarIcon(NSObject):
         status, code, remaining = license_manager.get_status()
         menu = NSMenu.alloc().init()
         
-        # 【步骤 1】许可信息
+        # 【步骤 1】功能区
+        print("[DEBUG] [StatusBar] 添加功能区...")
+        self.files_header = _add_menu_item(menu, self, "无待移动文件", enabled=False)
+        _add_menu_item(menu, self, "清空列表", "clearCut:")
+        
+        # 【步骤 2】文件智能操作子菜单（根据配置动态构建）
+        print("[DEBUG] [StatusBar] 构建文件智能操作子菜单...")
+        self.smart_ops_menu = self._build_smart_ops_menu()
+        
+        # 主菜单项：使用简洁的标题
+        smart_ops_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("文件智能操作", None, "")
+        smart_ops_item.setSubmenu_(self.smart_ops_menu)
+        menu.addItem_(smart_ops_item)
+        print("[DEBUG] [StatusBar] ✓ 文件智能操作子菜单已添加")
+        
+        # 【步骤 3】配置选项子菜单（按照流程图：与文件智能操作平级）
+        print("[DEBUG] [StatusBar] 构建配置选项子菜单...")
+        self.config_menu = self._build_config_menu()
+        
+        # 主菜单项：使用简洁的标题
+        config_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("配置选项", None, "")
+        config_item.setSubmenu_(self.config_menu)
+        menu.addItem_(config_item)
+        print("[DEBUG] [StatusBar] ✓ 配置选项子菜单已添加")
+        
+        menu.addItem_(NSMenuItem.separatorItem())
+        
+        # 【步骤 4】许可信息
         print(f"[DEBUG] [StatusBar] 添加许可信息区域 - status={status}")
         from .license_manager import license_manager
         
@@ -647,33 +674,6 @@ class StatusBarIcon(NSObject):
         activation_item.setSubmenu_(activation_menu)
         menu.addItem_(activation_item)
         print("[DEBUG] [StatusBar] ✓ 激活/购买子菜单已添加")
-        
-        menu.addItem_(NSMenuItem.separatorItem())
-        
-        # 【步骤 2】功能区
-        print("[DEBUG] [StatusBar] 添加功能区...")
-        self.files_header = _add_menu_item(menu, self, "无待移动文件", enabled=False)
-        _add_menu_item(menu, self, "清空列表", "clearCut:")
-        
-        # 【步骤 3】文件智能操作子菜单（根据配置动态构建）
-        print("[DEBUG] [StatusBar] 构建文件智能操作子菜单...")
-        self.smart_ops_menu = self._build_smart_ops_menu()
-        
-        # 主菜单项：使用简洁的标题
-        smart_ops_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("文件智能操作", None, "")
-        smart_ops_item.setSubmenu_(self.smart_ops_menu)
-        menu.addItem_(smart_ops_item)
-        print("[DEBUG] [StatusBar] ✓ 文件智能操作子菜单已添加")
-        
-        # 【步骤 4】配置选项子菜单（按照流程图：与文件智能操作平级）
-        print("[DEBUG] [StatusBar] 构建配置选项子菜单...")
-        self.config_menu = self._build_config_menu()
-        
-        # 主菜单项：使用简洁的标题
-        config_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("配置选项", None, "")
-        config_item.setSubmenu_(self.config_menu)
-        menu.addItem_(config_item)
-        print("[DEBUG] [StatusBar] ✓ 配置选项子菜单已添加")
         
         menu.addItem_(NSMenuItem.separatorItem())
         
