@@ -384,7 +384,7 @@ def execute(content, action: str = "translate", content_type: str = None) -> tup
             return False, "文本内容为空", None
         processed_content = content
         content_info = f"文本内容（{len(content)} 字符）"
-        print(f"[DEBUG] [KimiApiPlugin] 文本内容预览: {content[:100]}...")
+        print(f"[DEBUG] [KimiApiPlugin] 文本内容预览: {content}...")
     
     elif content_type == "file":
         print(f"[DEBUG] [KimiApiPlugin] 处理文件内容...")

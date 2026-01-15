@@ -614,8 +614,28 @@ class StatusBarIcon(NSObject):
         # 复制机器码
         _add_menu_item(activation_menu, self, "📋 复制机器码", "copyMachineCode:")
         
-        # 访问官网续7天
-        _add_menu_item(activation_menu, self, "🌐 访问官网续7天(偷偷告诉可以无限白嫖)", "visitWebsiteExtendTrial:")
+        # 访问官网续7天（每3天可以续期一次）
+        from .license_manager import license_manager
+        import time
+        can_extend = license_manager.can_visit_website_extend()
+        if can_extend:
+            menu_title = "🌐 访问官网续7天"
+        else:
+            # 计算剩余等待时间
+            last_extend = license_manager._data.get('last_website_extend_time', 0)
+            if last_extend > 0:
+                elapsed_days = (time.time() - last_extend) / 86400
+                remaining_days = 3 - elapsed_days
+                if remaining_days > 0:
+                    menu_title = f"🌐 访问官网续7天（还需等待 {remaining_days:.1f} 天）"
+                else:
+                    menu_title = "🌐 访问官网续7天（还需等待）"
+            else:
+                menu_title = "🌐 访问官网续7天"
+        
+        menu_item = _add_menu_item(activation_menu, self, menu_title, "visitWebsiteExtendTrial:")
+        if not can_extend:
+            menu_item.setEnabled_(False)  # 禁用菜单项
         
         activation_menu.addItem_(NSMenuItem.separatorItem())
         
@@ -1041,20 +1061,39 @@ class StatusBarIcon(NSObject):
     
     @objc.IBAction
     def visitWebsiteExtendTrial_(self, sender):
-        """访问官网续7天（每次点击都可以续期，无限制）"""
+        """访问官网续7天（每3天可以续期一次）"""
+        import time
         from AppKit import NSWorkspace, NSURL
         from .license_manager import license_manager
+        
+        # 检查是否可以续期
+        if not license_manager.can_visit_website_extend():
+            # 计算剩余等待时间
+            last_extend = license_manager._data.get('last_website_extend_time', 0)
+            if last_extend > 0:
+                elapsed_days = (time.time() - last_extend) / 86400
+                remaining_days = 3 - elapsed_days
+                if remaining_days > 0:
+                    self.send_notification("⏰ 提示", f"距离上次续期不足3天，还需等待 {remaining_days:.1f} 天")
+                else:
+                    self.send_notification("⏰ 提示", "距离上次续期不足3天，无法续期")
+            else:
+                self.send_notification("⏰ 提示", "距离上次续期不足3天，无法续期")
+            return
         
         # 打开官网
         website_url = "https://github.com/zhangs-cedar/mac-commondX"
         NSWorkspace.sharedWorkspace().openURL_(NSURL.URLWithString_(website_url))
         
-        # 延长试用期7天（无限制，每次都可以续期）
-        license_manager.extend_trial_unlimited()
-        rem = license_manager.remaining_days()
-        self.send_notification("✅ 续期成功", f"已访问官网，试用期已延长7天，剩余 {rem} 天")
-        # 刷新菜单（更新许可证状态显示）
-        self.setup_menu()
+        # 延长试用期7天（每3天可以续期一次）
+        success = license_manager.extend_trial_unlimited()
+        if success:
+            rem = license_manager.remaining_days()
+            self.send_notification("✅ 续期成功", f"已访问官网，试用期已延长7天，剩余 {rem} 天")
+            # 刷新菜单（更新许可证状态显示）
+            self.setup_menu()
+        else:
+            self.send_notification("❌ 续期失败", "无法延长试用期")
          
     @objc.IBAction
     def openBuyPage_(self, sender):

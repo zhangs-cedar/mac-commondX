@@ -10,6 +10,7 @@ from cedar.utils import print, create_name, load_config, write_config
 TRIAL_DAYS = 21  # 初始试用期21天
 ACTIVATION_DAYS = 365  # 每次激活码激活延长1年（365天）
 EXTEND_DAYS = 7  # 每次延长7天（用于访问官网续期）
+WEBSITE_EXTEND_INTERVAL_DAYS = 3  # 每3天可以访问官网续期一次
 DAY_SECS = 86400
 
 # 许可证文件路径（与配置文件分离）- 从环境变量读取
@@ -176,15 +177,37 @@ class LicenseManager:
         print(f"[4] [License] 检查许可证 - 剩余天数={rem}, 已过期={is_expired}, 有效={is_valid}")
         return is_valid
     
-    def extend_trial_unlimited(self) -> bool:
+    def can_visit_website_extend(self) -> bool:
         """
-        延长试用期7天（无限制，每次都可以延长）
-        
-        用于访问官网续期功能，不检查时间间隔限制
+        检查是否可以访问官网续期（每3天可以续期一次）
         
         Returns:
-            bool: 总是返回 True（延长成功）
+            bool: 如果可以续期返回 True，否则返回 False
         """
+        last_extend = self._data.get('last_website_extend_time', 0)
+        if last_extend == 0:
+            # 从未续期过，可以续期
+            print("[DEBUG] [License] 从未访问官网续期过，可以续期")
+            return True
+        
+        elapsed_days = (time.time() - last_extend) / DAY_SECS
+        can_extend = elapsed_days >= WEBSITE_EXTEND_INTERVAL_DAYS
+        print(f"[DEBUG] [License] 检查是否可以访问官网续期 - 上次续期: {last_extend}, 已过 {elapsed_days:.1f} 天, 可续期: {can_extend}")
+        return can_extend
+    
+    def extend_trial_unlimited(self) -> bool:
+        """
+        延长试用期7天（每3天可以续期一次）
+        
+        用于访问官网续期功能，检查时间间隔限制（每3天可以续期一次）
+        
+        Returns:
+            bool: 如果延长成功返回 True，否则返回 False
+        """
+        if not self.can_visit_website_extend():
+            print("[DEBUG] [License] 距离上次访问官网续期不足3天，无法续期")
+            return False
+        
         # 延长试用期7天：将 trial_start 向后推7天（增加 trial_start，减少已过去天数）
         # 逻辑：trial_start 增大 → elapsed_days 减小 → remaining_days 增大
         self.trial_start += EXTEND_DAYS * DAY_SECS
