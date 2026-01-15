@@ -261,25 +261,29 @@ def _get_system_messages() -> list:
     ]
 
 
-def _select_model(content_type: str, file_type: str = None) -> str:
+def _select_model(content_type: str, file_type: str = None, has_file_object: bool = False) -> str:
     """
     根据内容类型自动选择模型
     
     Args:
         content_type: 内容类型（text/file/image）
         file_type: 文件类型（text/image/binary，仅当 content_type=file 时有效）
+        has_file_object: 是否使用了文件上传 API（file_object）
     
     Returns:
         str: 模型名称
     """
-    # 复杂文件/图片使用 kimi-k2-turbo-preview
-    if content_type == "image" or (content_type == "file" and file_type in ["image", "binary"]):
+    # 如果使用了文件上传 API（PDF、DOC、图片等），必须使用 kimi-k2-turbo-preview
+    if has_file_object:
+        model = "kimi-k2-turbo-preview"
+        print(f"[DEBUG] [KimiApiPlugin] 选择模型: {model} (文件上传，支持文件提取)")
+    elif content_type == "image" or (content_type == "file" and file_type in ["image", "binary"]):
         model = "kimi-k2-turbo-preview"
         print(f"[DEBUG] [KimiApiPlugin] 选择模型: {model} (复杂内容)")
     else:
-        # 文本/简单文件使用 moonshot-v1-8k
+        # 纯文本内容使用 moonshot-v1-8k
         model = "moonshot-v1-8k"
-        print(f"[DEBUG] [KimiApiPlugin] 选择模型: {model} (简单内容)")
+        print(f"[DEBUG] [KimiApiPlugin] 选择模型: {model} (简单文本内容)")
     
     return model
 
@@ -496,6 +500,11 @@ def execute(content, action: str = "translate", content_type: str = None) -> tup
             print(f"[DEBUG] [KimiApiPlugin] 获取文件内容...")
             file_content = client.files.content(file_id=file_object.id).text
             print(f"[DEBUG] [KimiApiPlugin] ✓ 文件内容已获取，长度: {len(file_content)} 字符")
+            
+            # 检查文件内容是否为空
+            if not file_content or not file_content.strip():
+                print(f"[WARN] [KimiApiPlugin] 文件内容为空，可能文件提取失败")
+                return False, "文件内容提取失败，请确保文件格式正确且未被加密", None
         except Exception as e:
             print(f"[ERROR] [KimiApiPlugin] 文件上传失败: {e}")
             import traceback
@@ -543,6 +552,17 @@ def execute(content, action: str = "translate", content_type: str = None) -> tup
             file_content = client.files.content(file_id=file_object.id).text
             print(f"[DEBUG] [KimiApiPlugin] ✓ 图片内容已获取，长度: {len(file_content)} 字符")
             
+            # 检查文件内容是否为空
+            if not file_content or not file_content.strip():
+                print(f"[WARN] [KimiApiPlugin] 图片内容为空，可能文件提取失败")
+                # 清理临时文件
+                if tmp_file_path and tmp_file_path.exists():
+                    try:
+                        tmp_file_path.unlink()
+                    except:
+                        pass
+                return False, "图片内容提取失败，请确保图片格式正确", None
+            
             file_type = "image"
             file_path = tmp_file_path  # 用于后续清理
         except Exception as e:
@@ -562,19 +582,19 @@ def execute(content, action: str = "translate", content_type: str = None) -> tup
         print(f"[ERROR] [KimiApiPlugin] 不支持的内容类型: {content_type}")
         return False, f"不支持的内容类型: {content_type}", None
     
-    # 选择模型
-    model = _select_model(content_type, file_type)
+    # 选择模型（如果使用了文件上传 API，必须使用 kimi-k2-turbo-preview）
+    model = _select_model(content_type, file_type, has_file_object=(file_object is not None))
     
     # 构建 messages
     messages = _get_system_messages()
     
-    # 如果有文件内容，添加为 system message
+    # 如果有文件内容，添加为 system message（第二个 system message，包含文件内容）
     if file_object and file_content:
         messages.append({
             "role": "system",
             "content": file_content,
         })
-        print(f"[DEBUG] [KimiApiPlugin] 文件内容已添加到 system message")
+        print(f"[DEBUG] [KimiApiPlugin] 文件内容已添加到 system message，长度: {len(file_content)} 字符")
     
     # 根据 action 构建 user message
     prompts = {
@@ -593,17 +613,19 @@ def execute(content, action: str = "translate", content_type: str = None) -> tup
             if action == "translate":
                 action = "analyze"
             prompts = {
-                "analyze": "请分析以下图片内容，用中文详细描述图片中的内容、场景、对象等信息。",
-                "explain": "请解释以下图片内容，用简洁明了的中文说明图片的含义和主要内容。",
+                "analyze": "请分析这个图片的内容，用中文详细描述图片中的内容、场景、对象等信息。",
+                "explain": "请解释这个图片的内容，用简洁明了的中文说明图片的含义和主要内容。",
             }
         else:
+            # 文件类型（PDF、DOC等），使用更明确的提示词
+            file_name = Path(file_path).name if file_path else "文件"
             prompts = {
-                "analyze": "请分析以下文件内容，用中文详细说明。",
-                "explain": "请解释以下文件内容，用简洁明了的中文说明。",
-                "summarize": "请总结以下文件内容，用简洁的中文概括要点。",
-                "translate": "请将以下文件内容翻译成中文，保持原意和语气。",
+                "analyze": f"请分析这个{file_name}的内容，用中文详细说明文件的主要内容和要点。",
+                "explain": f"请解释这个{file_name}的内容，用简洁明了的中文说明文件的含义和主要内容。",
+                "summarize": f"请总结这个{file_name}的内容，用简洁的中文概括要点。",
+                "translate": f"请将这个{file_name}的内容翻译成中文，保持原意和语气。",
             }
-        prompt = prompts.get(action, prompts.get("analyze", "请分析以下内容："))
+        prompt = prompts.get(action, prompts.get("analyze", "请分析这个文件的内容。"))
         user_message = prompt
     else:
         user_message = prompts.get(action, prompts["translate"])
