@@ -2,7 +2,7 @@
 
 **补全 Finder 缺失的拼图，让 Mac 用起来更像 Mac。**
 
-> 注：设计灵感来自 [AppStore Command X](https://apps.apple.com/us/app/command-x/id6448461551?mt=12)
+> 注：设计灵感来自 [Mac AppStore Command X](https://apps.apple.com/us/app/command-x/id6448461551?mt=12)
 
 ---
 
