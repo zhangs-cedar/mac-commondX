@@ -207,31 +207,42 @@ def execute(input_data, action="translate"):
     """
     核心处理逻辑: 解析内容 -> 构造 Prompt -> 调用 LLM
     """
+    print(f"[DEBUG] [execute] 开始执行，action={action}, input_data={input_data}")
     if not API_KEY or not client:
+        print(f"[ERROR] [execute] API Key 或客户端检查失败: API_KEY={bool(API_KEY)}, client={bool(client)}")
         return False, "API Key 未配置或客户端初始化失败", None
+    print(f"[DEBUG] [execute] API Key 和客户端检查通过")
 
     final_text = ""
     source_desc = "文本"
 
     # 1. 解析输入数据
+    print(f"[DEBUG] [execute] 步骤1: 解析输入数据...")
     if isinstance(input_data, (Path, str)) and Path(str(input_data)).exists():
         file_path = Path(str(input_data))
         source_desc = f"文件 ({file_path.name})"
+        print(f"[DEBUG] [execute] 输入是文件: {file_path}")
         # 调用智能提取 (本地 -> API)
         final_text = extract_content_smart(file_path)
+        print(f"[DEBUG] [execute] 文件解析完成，内容长度: {len(final_text) if final_text else 0}")
         if not final_text:
+            print(f"[ERROR] [execute] 文件解析失败：内容为空或无法识别")
             return False, "文件解析失败（内容为空或无法识别）", None
     else:
+        print(f"[DEBUG] [execute] 输入是文本，长度: {len(str(input_data))}")
         final_text = str(input_data)
 
     if not final_text.strip():
+        print(f"[ERROR] [execute] 最终内容为空")
         return False, "内容为空", None
+    print(f"[DEBUG] [execute] 步骤1完成，最终文本长度: {len(final_text)}")
 
     # 截断过长文本以防止超出 Context (简单的截断，实际可根据 token 计算)
     # Kimi 支持长文本，但为了响应速度，可以考虑适当截断或总结
     # 这里我们保留完整文本，依赖 Kimi 的长窗口能力
     
     # 2. 构造 Prompt
+    print(f"[DEBUG] [execute] 步骤2: 构造 Prompt...")
     prompts = {
         "translate": "请将以下内容翻译成中文（若原文为中文则译为英文）。直接输出翻译结果，不要废话。",
         "explain": "请用通俗易懂的语言解释以下内容。保留核心信息。",
@@ -246,10 +257,13 @@ def execute(input_data, action="translate"):
         f"{final_text[:20000]} {'...' if len(final_text) > 20000 else ''}\n" # 简单防爆
         f"--- 内容结束 ---"
     )
+    print(f"[DEBUG] [execute] Prompt 构造完成，user_prompt 长度: {len(user_prompt)}")
 
     # 3. 调用 Kimi Chat API
-    print(f"[DEBUG] [KimiApiPlugin] 发送请求给 LLM, action={action}, 文本长度={len(final_text)}")
+    print(f"[DEBUG] [execute] 步骤3: 调用 Kimi Chat API...")
+    print(f"[DEBUG] [execute] action={action}, 文本长度={len(final_text)}")
     try:
+        print(f"[DEBUG] [execute] 正在发送请求到 LLM...")
         completion = client.chat.completions.create(
             model="moonshot-v1-8k", # 如果文本很长，代码逻辑可以自动切换到 32k
             messages=[
@@ -259,12 +273,61 @@ def execute(input_data, action="translate"):
             temperature=0.3,
         )
         result_text = completion.choices[0].message.content
+        print(f"[DEBUG] [execute] ✓ LLM 请求成功，返回内容长度: {len(result_text)}")
         return True, "成功", result_text
     except Exception as e:
-        print(f"[ERROR] LLM 请求失败: {e}")
+        print(f"[ERROR] [execute] LLM 请求失败: {e}")
+        import traceback
+        print(f"[ERROR] [execute] 详细错误信息:\n{traceback.format_exc()}")
         return False, f"LLM 请求失败: {str(e)}", None
 
 if __name__ == "__main__":
     # 简单的本地测试逻辑
-    print("请手动运行 execute_from_clipboard() 或 execute() 进行测试")
-    execute("test.pdf", action="translate")
+    print("[DEBUG] [测试] 开始测试流程...")
+    APP_DATA_DIR = Path.home() / "Library/Application Support/CommondX"
+    # 配置文件路径
+    CONFIG_PATH = APP_DATA_DIR / "config.yaml"
+    os.environ['CONFIG_PATH'] = str(CONFIG_PATH)
+    print(f"[DEBUG] [测试] 配置文件路径: {CONFIG_PATH}")
+
+    # 加载配置
+    _config_path = os.getenv('CONFIG_PATH')
+    CONFIG = load_config(_config_path)
+    API_KEY = CONFIG.get('kimi_api', {}).get('api_key')
+    print(f"[DEBUG] [测试] API_KEY: {API_KEY[:20]}..." if API_KEY else "[DEBUG] [测试] API_KEY: 未配置")
+    
+    # 重新初始化 client（因为文件顶部初始化时 API_KEY 可能还未加载）
+    if API_KEY:
+        try:
+            client = OpenAI(api_key=API_KEY, base_url=KIMI_API_BASE_URL)
+            print(f"[DEBUG] [测试] ✓ OpenAI 客户端已重新初始化")
+        except Exception as e:
+            print(f"[ERROR] [测试] 初始化客户端失败: {e}")
+            client = None
+    else:
+        print(f"[WARN] [测试] API Key 未配置，无法初始化客户端")
+        client = None
+    
+    # 执行测试
+    test_list = [
+        "/Users/zhangsong/Desktop/文档/config.pdf",
+        "/Users/zhangsong/Desktop/文档/20251220-基于双backbone双head架构网络的纺织品缺陷检测与严重程度评.docx",
+        "/Users/zhangsong/Desktop/文档/1.txt",
+        "/Users/zhangsong/Desktop/文档/Snipaste_2026-01-16_10-45-39.png"
+        "Hello, world!",
+        "Hello, world!",
+    ]
+    for test_item in test_list:
+        print(f"[DEBUG] [测试] 开始执行 execute()...")
+        result = execute(test_item, action="translate")
+        print(f"[DEBUG] [测试] execute() 返回结果:")
+        print(f"[DEBUG] [测试]   成功: {result[0]}")
+        print(f"[DEBUG] [测试]   消息: {result[1]}")
+        if result[2]:
+            print(f"[DEBUG] [测试]   内容长度: {len(result[2])}")
+            print(f"[DEBUG] [测试]   内容预览: {result[2][:200]}...")
+        else:
+            print(f"[DEBUG] [测试]   内容: None")
+
+
+    
