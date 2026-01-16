@@ -1,80 +1,81 @@
-# ✂️ CommondX - Mac 文件剪切神器
+# CommondX
 
-> 让 Mac 也能像 Windows 一样剪切移动文件！
-
-## 😤 你是否也有这样的困扰？
-
-在 Windows 上习惯了 `Ctrl+X` 剪切文件，换到 Mac 却发现：
-- Finder 的 `Cmd+X` 居然不能剪切文件？！
-- 只能先复制，再删除原文件？
-- 拖拽移动太麻烦，文件夹层级深的时候简直崩溃...
-
-## ✨ CommondX 来拯救你！
-
-一款轻量级 Mac 工具，让你在 Finder 中：
-
-- **`Cmd+X`** 剪切文件/文件夹
-- **`Cmd+V`** 移动到目标位置
-- 支持多选、跨磁盘移动
-- 状态栏实时显示待移动文件数量
-- 剪刀动画，操作反馈超直观 ✂️
-
-## 🎬 效果演示
-
-![CommondX 演示](tools/demo.gif)
-
-## 🚀 开始使用
-
-1. 下载安装 CommondX
-2. 授予辅助功能权限
-3. 在 Finder 中选中文件，按 `Cmd+X`
-4. 打开目标文件夹，按 `Cmd+V`
-5. Done! 文件已移动 🎉
-
-## 📦 下载安装
-
-### v1.0.0 (2026-01-08)
-- 📥 [CommondX-1.0.0.dmg](https://github.com/zhangs-cedar/mac-commondX/releases/download/1.0.0/CommondX-1.0.0.dmg)
-
-
-- 首个正式版本，支持 Cmd+X 剪切、Cmd+V 移动
-
-> 💡 下载后双击 DMG 文件，将 CommondX 拖入 Applications 文件夹即可
-
-## 💰 价格
-
-- **21 天免费试用**，完整体验所有功能
-- 激活码仅需 **¥2.00**（淀粉肠钱都不到）
-
-### 购买方式
-
-扫码填写问卷获取激活码：
-
-![购买二维码](tools/dc04f38e79f63b851d8d1bacdfbcbd22.png)
-
-或访问：[购买链接](https://wj.qq.com/s2/25468218/6ee1/)
-
-## 🔓 开源
-
-本项目完全开源，欢迎 Star ⭐ 和 PR！
-
-- GitHub: [zhangs-cedar/mac-commondX](https://github.com/zhangs-cedar/mac-commondX)
-- 开源协议: [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) (非商业使用)
-
-
-本项目采用 CC BY-NC 4.0 协议发布。
-
-✅ 允许学习、修改、分享 | ❌ 禁止商业使用
-
-> 💡 代码开源供学习，禁止商业使用。激活码收费支持作者持续维护 ❤️
-
-## 📮 联系作者
-
-- 微信：`z858998813`（非必要请勿打扰，谢谢 🙏）
-- GitHub Issues: [提交问题/建议](https://github.com/zhangs-cedar/mac-commondX/issues)
+**补全 Finder 缺失的拼图，赋予 macOS 文件管理原生级的剪切与 AI 智能。**
 
 ---
 
-**CommondX** - 让 Mac 文件管理更高效 ⚡
+## 💡 为什么选择 CommondX？
 
-![GitHub stars](https://img.shields.io/github/stars/zhangs-cedar/mac-commondX?style=social)
+macOS 的 Finder 优雅但有时不够高效。CommondX 以极简的方式介入，不改变你的使用习惯，只在关键时刻提供你最需要的功能。
+
+### 1. 终于，Mac 也有了 `Cmd+X`
+
+**痛点**：Finder 原生不支持文件剪切，移动文件必须“复制+粘贴+删除”或依赖拖拽。
+**体验**：CommondX 让一切回归直觉。
+
+* 选中文件 **`Cmd+X`** 剪切
+* 目标位置 **`Cmd+V`** 移动
+* *支持多文件批量操作、支持跨磁盘移动，如原生般丝滑。*
+
+### 2. 极速“智能操作”菜单
+
+**痛点**：压缩、解压、格式转换通常需要打开特定的 App，步骤繁琐。
+**体验**：**连续选中两次**同一个文件，即刻唤醒智能菜单。
+
+* 📦 **基础操作**：一键压缩/解压、复制路径、终端打开。
+* 📄 **格式转换**：Markdown 转 HTML、PDF/Word 在线编辑。
+* 🤖 **AI 处理**：配置 API 后，直接对文件内容进行 AI 分析。
+
+### 3. 全局 AI 剪贴板助手
+
+**痛点**：处理剪贴板内容（翻译、总结）需要在浏览器和 App 间反复跳转。
+**体验**：**连续两次 `Cmd+C**`，AI 助手即刻响应。
+
+* 支持文本、图片、文件内容。
+* 瞬间完成翻译、解释、总结或代码分析，无需离开当前窗口。
+
+---
+
+## 🛠️ 安装与配置
+
+### 快速开始
+
+1. **下载**：[CommondX-1.0.0.dmg](https://github.com/zhangs-cedar/mac-commondX/releases/download/1.0.0/CommondX-1.0.0.dmg)
+2. **安装**：拖入 Applications 文件夹。
+3. **授权**：首次运行授予辅助功能权限即可。
+
+### 许可证与定价
+
+我们坚持开源与极低门槛的商业化尝试。
+
+| 方案 | 价格 | 说明 |
+| --- | --- | --- |
+| **免费试用** | **¥0** | 21 天全功能免费体验 |
+| **正式激活** | **¥2.00 / 年** | 仅需一瓶水的价格，支持持续开发 |
+| **开源协议** | **CC BY-NC 4.0** | 代码完全开源，供学习研究（非商用） |
+
+👉 **[点击获取激活码](https://wj.qq.com/s2/25468218/6ee1/)**
+
+---
+
+## 🧑‍💻 开发者视角：由 AI 驱动的开发实验
+
+CommondX 不仅是一个工具，更是一次**AI 辅助编程（AI-Native Development）**的实践。本项目深度使用 [Cursor](https://cursor.sh/) 开发，探索了无需精通 GUI 编程也能构建原生应用的可能。
+
+**我们如何利用 AI 提效：**
+
+* **规范前置**：通过 `.cursorrules` 定义代码风格与架构原则，让 AI 成为守规矩的资深程序员。
+* **架构驱动**：AI 读取 `流程图.md` 理解业务逻辑，确保代码修改不偏离设计初衷。
+* **经验复用**：独创 `.ai-errors-log.md` 机制，记录历史错误，让 AI 真正“吃一堑长一智”。
+
+**开源仓库**：
+如果你对 AI 辅助开发感兴趣，欢迎 Star 或 Fork 我们的代码：
+[🐙 GitHub: zhangs-cedar/mac-commondX](https://github.com/zhangs-cedar/mac-commondX)
+
+---
+
+## 📬 联系与反馈
+
+* **Issues**：[GitHub 提交反馈](https://github.com/zhangs-cedar/mac-commondX/issues)
+* **微信**：`z858998813`（请注明来自 CommondX）
+
