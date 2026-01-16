@@ -1,4 +1,4 @@
-# CommondX：实在忍不了 Finder 了，自己动手改改
+# CommondX：为 macOS 添加「剪切」快捷键和方便的快速操作
 
 **补全 Finder 缺失的拼图，让 Mac 用起来更像 Mac。**
 
