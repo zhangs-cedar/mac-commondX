@@ -1,6 +1,8 @@
-# CommondX
+# CommondX：实在忍不了 Finder 了，自己动手改改
 
 **补全 Finder 缺失的拼图，让 Mac 用起来更像 Mac。**
+
+> 注：设计灵感来自 [AppStore Command X](https://apps.apple.com/us/app/command-x/id6448461551?mt=12)
 
 ---
 
