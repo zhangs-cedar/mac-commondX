@@ -1,18 +1,6 @@
 #!/usr/bin/env python3
-"""
-Kimi API 插件 (优化版)
-
-调用 Kimi API 实现翻译、解释等功能。
-优先使用本地库进行 PDF/Word 解析和图片 OCR，失败时自动回退到 Kimi 云端解析。
-
-前置依赖:
-pip install openai pypdf python-docx pytesseract pillow
-系统需安装 tesseract (brew install tesseract) 以支持本地 OCR
-"""
-
 import os
 import tempfile
-import traceback
 from pathlib import Path
 from openai import OpenAI
 # 尝试导入本地解析库
