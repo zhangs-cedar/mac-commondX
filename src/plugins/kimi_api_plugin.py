@@ -271,6 +271,7 @@ def execute(input_data, action="summarize"):
         )
         result_text = completion.choices[0].message.content
         print(f"[DEBUG] [execute] ✓ LLM 请求成功，返回内容长度: {len(result_text)}")
+        print(f"[DEBUG] [execute] 返回内容: {result_text}")
         return True, "成功", result_text
     except Exception as e:
         print(f"[ERROR] [execute] LLM 请求失败: {e}")
