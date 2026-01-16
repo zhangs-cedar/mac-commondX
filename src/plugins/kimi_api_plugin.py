@@ -23,7 +23,24 @@ KIMI_API_BASE_URL = "https://api.moonshot.cn/v1"
 LOCAL_PARSE_EXTENSIONS = {
     'pdf': ['.pdf'],
     'docx': ['.docx'],
-    'image': ['.png', '.jpg', '.jpeg', '.bmp', '.tiff', '.webp']
+    'image': ['.png', '.jpg', '.jpeg', '.bmp', '.tiff', '.webp'],
+    'text': [
+        # 编程语言
+        '.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.cpp', '.c', '.h', '.hpp',
+        '.go', '.rs', '.rb', '.php', '.swift', '.kt', '.scala', '.clj', '.lua',
+        '.r', '.m', '.mm', '.pl', '.sh', '.bash', '.zsh', '.fish', '.ps1',
+        # Web 相关
+        '.html', '.htm', '.css', '.scss', '.sass', '.less', '.vue', '.svelte',
+        # 配置文件
+        '.json', '.yaml', '.yml', '.toml', '.ini', '.conf', '.config', '.xml',
+        '.properties', '.env', '.gitignore', '.dockerfile',
+        # 文档和标记
+        '.md', '.markdown', '.txt', '.rtf', '.log', '.csv', '.tsv',
+        # 数据格式
+        '.sql', '.graphql', '.gql', '.proto', '.thrift',
+        # 其他文本格式
+        '.diff', '.patch', '.lock', '.lockb'
+    ]
 }
 
 # 初始化客户端
@@ -90,8 +107,20 @@ def extract_content_smart(file_path: Path) -> str:
             content = None
     elif ext in LOCAL_PARSE_EXTENSIONS['docx']:
         content = local_parse_docx(file_path)
+    elif ext in LOCAL_PARSE_EXTENSIONS['text']:
+        # 编程文件和文本文件直接读取
+        print(f"[DEBUG] [LocalParser] 正在读取文本文件: {file_path.name}")
+        try:
+            content = file_path.read_text(encoding='utf-8')
+        except:
+            try:
+                content = file_path.read_text(encoding='gbk')
+            except Exception as e:
+                print(f"[WARN] [LocalParser] 文本文件读取失败: {e}")
+                content = None
     else:
-        # 普通文本尝试直接读取
+        # 其他格式尝试直接读取（兼容未知文本格式）
+        print(f"[DEBUG] [LocalParser] 尝试直接读取未知格式: {file_path.name}")
         try:
             content = file_path.read_text(encoding='utf-8')
         except:
