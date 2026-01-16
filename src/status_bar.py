@@ -1473,8 +1473,8 @@ class StatusBarIcon(NSObject):
             file_path = files[0]
             print(f"[DEBUG] [StatusBar] 处理文件: {file_path}")
             
-            # 调用 Kimi API 处理文件（默认使用 analyze 动作）
-            success, msg, result = kimi_api_execute(file_path, "analyze", "file")
+            # 调用 Kimi API 处理文件（默认使用 总结 summarize 动作）
+            success, msg, result = kimi_api_execute(file_path, "summarize")
             
             if success and result:
                 # 显示结果弹窗

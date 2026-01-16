@@ -203,7 +203,7 @@ def execute_from_clipboard(action: str = "translate") -> tuple:
     return result
 
 
-def execute(input_data, action="translate"):
+def execute(input_data, action="summarize"):
     """
     核心处理逻辑: 解析内容 -> 构造 Prompt -> 调用 LLM
     """
@@ -236,6 +236,7 @@ def execute(input_data, action="translate"):
         print(f"[ERROR] [execute] 最终内容为空")
         return False, "内容为空", None
     print(f"[DEBUG] [execute] 步骤1完成，最终文本长度: {len(final_text)}")
+    print(f"[DEBUG] [execute] 最终文本: {final_text}")
 
     # 截断过长文本以防止超出 Context (简单的截断，实际可根据 token 计算)
     # Kimi 支持长文本，但为了响应速度，可以考虑适当截断或总结
@@ -244,18 +245,14 @@ def execute(input_data, action="translate"):
     # 2. 构造 Prompt
     print(f"[DEBUG] [execute] 步骤2: 构造 Prompt...")
     prompts = {
-        "translate": "请将以下内容翻译成中文（若原文为中文则译为英文）。直接输出翻译结果，不要废话。",
-        "explain": "请用通俗易懂的语言解释以下内容。保留核心信息。",
-        "summarize": "请对以下内容进行结构化总结，列出关键要点。",
-        "analyze": "请深入分析以下内容，指出其核心逻辑、潜在含义或优缺点。",
+        "summarize": "总结以下内容。如为外文先译中文再总结。列出关键要点，不超过80字。",
     }
     
-    sys_prompt = "你是 Kimi，一个高效、准确的 AI 助手。你的回答必须直接切入主题，没有任何开场白或结束语。"
+    sys_prompt = "你是 Kimi。回答要求：1)不超过80字，简洁明了；2)外文先译中文再答；3)中文先译英文再答；4)提供依据；5)无礼貌用语，直接回答。"
     user_prompt = (
-        f"任务：{prompts.get(action, '请处理此内容')}。\n\n"
-        f"--- 待处理内容 ({source_desc}) ---\n"
-        f"{final_text[:20000]} {'...' if len(final_text) > 20000 else ''}\n" # 简单防爆
-        f"--- 内容结束 ---"
+        f"任务：{prompts.get(action, '处理此内容')}\n\n"
+        f"内容 ({source_desc}):\n"
+        f"{final_text[:20000]}{'...' if len(final_text) > 20000 else ''}"
     )
     print(f"[DEBUG] [execute] Prompt 构造完成，user_prompt 长度: {len(user_prompt)}")
 
@@ -313,13 +310,12 @@ if __name__ == "__main__":
         "/Users/zhangsong/Desktop/文档/config.pdf",
         "/Users/zhangsong/Desktop/文档/20251220-基于双backbone双head架构网络的纺织品缺陷检测与严重程度评.docx",
         "/Users/zhangsong/Desktop/文档/1.txt",
-        "/Users/zhangsong/Desktop/文档/Snipaste_2026-01-16_10-45-39.png"
-        "Hello, world!",
+        "/Users/zhangsong/Desktop/文档/Snipaste_2026-01-16_10-45-39.png",
         "Hello, world!",
     ]
     for test_item in test_list:
         print(f"[DEBUG] [测试] 开始执行 execute()...")
-        result = execute(test_item, action="translate")
+        result = execute(test_item)
         print(f"[DEBUG] [测试] execute() 返回结果:")
         print(f"[DEBUG] [测试]   成功: {result[0]}")
         print(f"[DEBUG] [测试]   消息: {result[1]}")
