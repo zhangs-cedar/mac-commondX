@@ -7,15 +7,16 @@ Markdown 转 HTML 插件
 
 from pathlib import Path
 import re
+import sys
 from cedar.utils import print
+from ..utils import get_resource_path
 
 # Mermaid.js 路径配置
-# 使用项目目录中的文件（打包时会包含）
-MERMAID_JS_PROJECT = Path(__file__).parent / "assets" / "mermaid.min.js"
+MERMAID_JS_PROJECT = get_resource_path("assets/mermaid.min.js", __file__)
 
 # KaTeX 路径配置（LaTeX 公式渲染）
-KATEX_JS_PROJECT = Path(__file__).parent / "assets" / "katex.min.js"
-KATEX_CSS_PROJECT = Path(__file__).parent / "assets" / "katex.min.css"
+KATEX_JS_PROJECT = get_resource_path("assets/katex.min.js", __file__)
+KATEX_CSS_PROJECT = get_resource_path("assets/katex.min.css", __file__)
 
 
 def _get_mermaid_js() -> str:
@@ -28,6 +29,8 @@ def _get_mermaid_js() -> str:
         str: Mermaid.js 代码，如果获取失败返回空字符串
     """
     print(f"[DEBUG] [MdToHtmlPlugin] 开始获取 Mermaid.js...")
+    print(f"[DEBUG] [MdToHtmlPlugin] Mermaid.js 路径: {MERMAID_JS_PROJECT}")
+    print(f"[DEBUG] [MdToHtmlPlugin] 路径是否存在: {MERMAID_JS_PROJECT.exists()}")
     
     if MERMAID_JS_PROJECT.exists():
         try:
@@ -51,6 +54,8 @@ def _get_katex() -> tuple:
         tuple: (katex_js: str, katex_css: str)，如果获取失败返回空字符串
     """
     print(f"[DEBUG] [MdToHtmlPlugin] 开始获取 KaTeX...")
+    print(f"[DEBUG] [MdToHtmlPlugin] KaTeX.js 路径: {KATEX_JS_PROJECT}, 存在: {KATEX_JS_PROJECT.exists()}")
+    print(f"[DEBUG] [MdToHtmlPlugin] KaTeX.css 路径: {KATEX_CSS_PROJECT}, 存在: {KATEX_CSS_PROJECT.exists()}")
     
     katex_js = ""
     katex_css = ""
