@@ -56,6 +56,15 @@ Finder 不支持文件剪切，移动文件需要复制+粘贴+删除，或者�
 2. 拖入 Applications 文件夹
 3. 首次运行授予辅助功能权限
 
+### 配置 Kimi API（可选）
+
+如需使用 AI 功能（剪贴板助手、文件 AI 处理），需要配置 Kimi API Key：
+
+1. 点击状态栏 CommondX 图标
+2. 选择「配置」→「Kimi API Key」
+3. 输入你的 Kimi API Key（获取方式：访问 [Kimi 开放平台](https://platform.moonshot.cn/) 注册并获取 API Key）
+4. 保存后即可使用 AI 功能
+
 ### 许可证
 
 | 方案 | 价格 | 说明 |
