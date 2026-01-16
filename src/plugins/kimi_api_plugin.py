@@ -289,3 +289,4 @@ def execute(input_data, action="translate"):
 if __name__ == "__main__":
     # 简单的本地测试逻辑
     print("请手动运行 execute_from_clipboard() 或 execute() 进行测试")
+    execute("test.pdf", action="translate")
