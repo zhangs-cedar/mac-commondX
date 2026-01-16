@@ -56,6 +56,8 @@ Finder 不支持文件剪切，移动文件需要复制+粘贴+删除，或者�
 2. 拖入 Applications 文件夹
 3. 首次运行授予辅助功能权限
 
+> **备用下载**：如 GitHub 下载较慢，可使用 [中国移动云盘](https://yun.139.com/shareweb/#/w/i/2sCU6Hanv77x5)（提取码：`wh0s`）
+
 ### 配置 Kimi API（可选）
 
 如需使用 AI 功能（剪贴板助手、文件 AI 处理），需要配置 Kimi API Key：
