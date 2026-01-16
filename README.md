@@ -4,7 +4,7 @@
 
 > 注：设计灵感来自 [Mac AppStore Command X](https://apps.apple.com/us/app/command-x/id6448461551?mt=12)
 
----
+
 
 ## 为什么做这个工具？
 
@@ -46,7 +46,7 @@ Finder 不支持文件剪切，移动文件需要复制+粘贴+删除，或者�
 
 ![AI 剪贴板助手](tools/Snipaste_2026-01-16_15-25-29.png)
 
----
+
 
 ## 安装使用
 
@@ -70,14 +70,14 @@ Finder 不支持文件剪切，移动文件需要复制+粘贴+删除，或者�
 ### 许可证
 
 | 方案 | 价格 | 说明 |
-| --- | --- | --- |
+|  |  |  |
 | 免费试用 | ¥0 | 21 天全功能免费体验 |
 | 正式激活 | ¥2.00 / 年 | 支持持续开发 |
 | 开源协议 | CC BY-NC 4.0 | 代码完全开源，供学习研究（非商用） |
 
 👉 [获取激活码](https://wj.qq.com/s2/25468218/6ee1/)
 
----
+
 
 ## 开发说明
 
@@ -113,11 +113,11 @@ mac-commondX/
 
 👉 [GitHub: zhangs-cedar/mac-commondX](https://github.com/zhangs-cedar/mac-commondX)
 
----
+
 
 ## 反馈
 
 * **Issues**：[GitHub 提交反馈](https://github.com/zhangs-cedar/mac-commondX/issues)
 * **微信**：`z858998813`（备注 CommondX）
 
----
+
