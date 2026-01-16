@@ -14,24 +14,14 @@ import os
 import tempfile
 import traceback
 from pathlib import Path
+from openai import OpenAI
+# 尝试导入本地解析库
+import pytesseract
+from PIL import Image
+from pypdf import PdfReader
+from docx import Document
+from cedar.utils import print, load_config
 
-# 第三方库导入 (带错误处理，防止缺少库导致插件崩溃)
-try:
-    from openai import OpenAI
-    # 尝试导入本地解析库
-    import pytesseract
-    from PIL import Image
-    from pypdf import PdfReader
-    from docx import Document
-except ImportError as e:
-    print(f"[WARN] 缺少必要的库: {e}。请运行 pip install openai pypdf python-docx pytesseract pillow")
-
-# 假设 cedar.utils 是用户环境特有的，如果不存在则使用内置 print
-try:
-    from cedar.utils import print, load_config
-except ImportError:
-    from builtins import print
-    def load_config(path): return {}
 
 # --- 配置初始化 ---
 _config_path = os.getenv('CONFIG_PATH')
