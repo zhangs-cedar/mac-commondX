@@ -3,12 +3,10 @@
 全局快捷键监听 - Quartz Event Tap
 
 修复说明：
-1. 确保 ⌘+C 事件被捕获后立即返回原事件（return event），不干扰系统剪贴板写入。
-2. 增加了对 Event Tap 被系统意外禁用时的自动恢复逻辑（_recreate_tap）。
-3. 严格区分 Finder 逻辑（X/V）与全局逻辑（C）。
+1. 增加了对 Event Tap 被系统意外禁用时的自动恢复逻辑（_recreate_tap）。
+2. 严格区分 Finder 逻辑（X/V）；⌘+C 不拦截，由系统默认处理。
 """
 
-import time
 import Quartz
 from Quartz import (
     CGEventTapCreate, CGEventTapEnable, CFMachPortCreateRunLoopSource,
@@ -65,12 +63,8 @@ class EventTap:
         if not (flags & CMD) or (flags & EXCLUDE_FLAGS):
             return event
 
-        # --- 处理 ⌘+C (全局监听) ---
+        # ⌘+C 不拦截，交给系统默认复制
         if keycode == KEY_C:
-            if self.on_copy:
-                # 触发 app.py 中的异步检查逻辑
-                self.on_copy()
-            # 关键：必须返回原 event，让系统执行真正的复制动作
             return event
 
         # --- 处理 ⌘+X 和 ⌘+V (仅在 Finder 中生效) ---
