@@ -20,9 +20,8 @@ from .plugins.decompress_plugin import execute as decompress_execute
 from .plugins.md_to_html_plugin import execute as md_to_html_execute
 from .plugins.open_terminal_plugin import execute as open_terminal_execute
 from .plugins.pdf_editor_plugin import execute as pdf_editor_execute
-from .plugins.kimi_api_plugin import execute as kimi_api_execute
 
-# 配置文件路径（与许可证文件分离）- 从环境变量读取
+# 配置文件路径 - 从环境变量读取
 _config_path_str = os.getenv('CONFIG_PATH')
 CONFIG_PATH = Path(_config_path_str)
 
@@ -34,7 +33,6 @@ SMART_OPS_OPTIONS = {
     "copy_paths": {"title": "复制文件路径", "action": "smartCopyPaths:"},
     "open_terminal": {"title": "打开终端", "action": "smartOpenTerminal:"},
     "pdf_editor": {"title": "PDF WORD 等在线免费转化工具", "action": "smartPdfEditor:"},
-    "kimi_ai": {"title": "KIMI AI工具", "action": "smartKimiAi:"},
 }
 
 # 文件类型定义
@@ -60,7 +58,6 @@ DEFAULT_SUPPORTED_TYPES = {
     "copy_paths": ALL_FILE_TYPES,  # 复制文件路径支持所有类型
     "open_terminal": ALL_FILE_TYPES,  # 打开终端支持所有类型
     "pdf_editor": ["pdf", "document"],  # PDF WORD 等在线免费转化工具支持 PDF 和 Office 文档
-    "kimi_ai": ["markdown", "image", "text", "code", "pdf", "document"],  # KIMI AI工具支持多种文件类型
 }
 
 
@@ -244,7 +241,8 @@ class StatusBarIcon(NSObject):
         try:
             if CONFIG_PATH.exists():
                 data = load_config(str(CONFIG_PATH)) or {}
-                order = data.get('smart_ops_order', [])
+                raw_order = data.get('smart_ops_order', [])
+                order = [k for k in raw_order if k in SMART_OPS_OPTIONS]
                 print(f"[DEBUG] [StatusBar] 从配置文件读取顺序: {order}")
                 
                 # 验证顺序完整性（确保所有选项都在顺序列表中）
@@ -739,10 +737,8 @@ class StatusBarIcon(NSObject):
             menu.addItem_(main_item)
             print(f"[DEBUG] [StatusBar] 已添加配置项: {option['title']} (状态={'启用' if is_enabled else '禁用'})")
         
-        # 【步骤 3】添加分隔线和 API Key 输入、编辑配置文件选项
+        # 【步骤 3】添加分隔线与编辑配置文件
         menu.addItem_(NSMenuItem.separatorItem())
-        _add_menu_item(menu, self, "🔑 输入 KIMI API Key", "showKimiApiKeyInput:")
-        print("[DEBUG] [StatusBar] 已添加输入 KIMI API Key 选项")
         _add_menu_item(menu, self, "📝 编辑配置文件", "openConfigFile:")
         print("[DEBUG] [StatusBar] 已添加编辑配置文件选项")
         
@@ -887,61 +883,6 @@ class StatusBarIcon(NSObject):
         
         print(f"[DEBUG] [StatusBar] ✓ 文件类型支持已更新: {operation_key} - {new_supported_types}")
     
-    @objc.IBAction
-    def showKimiApiKeyInput_(self, sender):
-        """输入 Kimi API Key（简洁输入框）"""
-        print("[DEBUG] [StatusBar] 显示 Kimi API Key 输入框...")
-        
-        # 读取当前 API Key（如果存在）
-        current_key = None
-        try:
-            if CONFIG_PATH.exists():
-                data = load_config(str(CONFIG_PATH)) or {}
-                kimi_config = data.get('kimi_api', {})
-                current_key = kimi_config.get('api_key')
-        except Exception as e:
-            print(f"[WARN] [StatusBar] 读取当前 API Key 失败: {e}")
-        
-        # 显示简洁输入框（使用通用方法，自定义按钮和占位符）
-        result = self._show_alert_common(
-            "🔑 输入 Kimi API Key", 
-            "", 
-            buttons=["保存"], 
-            with_input=True, 
-            input_placeholder="请输入 Kimi API Key"
-        )
-        ok, api_key = result
-        
-        if ok and api_key:
-            api_key = api_key.strip()
-            if not api_key:
-                self.send_notification("❌ 输入无效", "API Key 不能为空")
-                return
-            
-            # 保存 API Key 到配置文件
-            try:
-                CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-                
-                # 读取现有配置
-                data = {}
-                if CONFIG_PATH.exists():
-                    data = load_config(str(CONFIG_PATH)) or {}
-                
-                # 更新 kimi_api 配置
-                if 'kimi_api' not in data:
-                    data['kimi_api'] = {}
-                data['kimi_api']['api_key'] = api_key
-                
-                # 保存配置文件
-                write_config(data, str(CONFIG_PATH))
-                print(f"[DEBUG] [StatusBar] ✓ API Key 已保存（长度={len(api_key)}）")
-                self.send_notification("✅ 保存成功", f"Kimi API Key 已保存（长度: {len(api_key)}）")
-            except Exception as e:
-                print(f"[ERROR] [StatusBar] 保存 API Key 失败: {e}")
-                import traceback
-                print(traceback.format_exc())
-                self.send_notification("❌ 保存失败", f"无法保存 API Key: {str(e)}")
-
     @objc.IBAction
     def clearCut_(self, sender):
         self.cut_manager.clear()
@@ -1293,32 +1234,6 @@ class StatusBarIcon(NSObject):
         self._execute_smart_operation("PDF WORD 等在线免费转化工具", _pdf_editor)
     
     @objc.IBAction
-    def smartKimiAi_(self, sender):
-        """KIMI AI工具：调用 Kimi API 处理文件"""
-        def _kimi_ai(files):
-            print(f"[DEBUG] [StatusBar] KIMI AI工具处理文件: {len(files)} 个文件")
-            # 只处理第一个文件
-            if not files:
-                return False, "未选择文件", None
-            
-            file_path = files[0]
-            print(f"[DEBUG] [StatusBar] 处理文件: {file_path}")
-            
-            # 调用 Kimi API 处理文件（默认使用 总结 summarize 动作）
-            success, msg, result = kimi_api_execute(file_path, "summarize")
-            
-            if success and result:
-                # 显示结果弹窗
-                self.show_kimi_result_popup(f"文件: {Path(file_path).name}", result)
-                self.send_notification("✅ AI 处理成功", "Kimi API 处理完成")
-            else:
-                self.send_notification("❌ AI 处理失败", msg or "处理失败")
-            
-            return success, msg
-        
-        self._execute_smart_operation("KIMI AI工具", _kimi_ai)
-    
-    @objc.IBAction
     def checkPermission_(self, sender):
         """检查权限"""
         from .permission import check_accessibility, open_accessibility_settings
@@ -1455,37 +1370,3 @@ class StatusBarIcon(NSObject):
         print(f"[DEBUG] [StatusBar] _show_alert_dialog() - title={title}")
         # 使用通用方法
         self._show_alert_common(title, msg, buttons=["确定"], with_input=False, alert_style=0)
-    
-    def show_kimi_result_popup(self, original_text: str, result_text: str):
-        """
-        显示 Kimi API 结果弹窗
-        
-        Args:
-            original_text: 原始文本
-            result_text: API 返回结果
-        """
-        print(f"[DEBUG] [StatusBar] show_kimi_result_popup() - 原始文本长度={len(original_text)}, 结果长度={len(result_text)}")
-        
-        # 构建消息内容
-        # 限制显示长度，避免弹窗过大
-        max_display_length = 500
-        original_display = original_text[:max_display_length] + ("..." if len(original_text) > max_display_length else "")
-        result_display = result_text[:max_display_length] + ("..." if len(result_text) > max_display_length else "")
-        
-        msg = f"原始文本：\n{original_display}\n\n结果：\n{result_display}"
-        
-        # 显示弹窗，包含"复制结果"和"关闭"按钮
-        response = self._show_alert_common(
-            "🤖 Kimi API 结果",
-            msg,
-            buttons=["复制结果", "关闭"],
-            with_input=False,
-            alert_style=0
-        )
-        
-        # 处理按钮点击
-        if response == 1000:  # 复制结果
-            from .utils import copy_to_clipboard
-            copy_to_clipboard(result_text)
-            self.send_notification("✅ 已复制", "结果已复制到剪贴板")
-            print(f"[DEBUG] [StatusBar] ✓ 结果已复制到剪贴板")
