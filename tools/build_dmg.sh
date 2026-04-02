@@ -6,7 +6,7 @@ set -e
 cd "$(dirname "$0")/.."
 
 APP_NAME="CommondX"
-VERSION="1.0.0"
+VERSION="2.0.0"
 TOOLS_DIR="tools"
 
 echo "=== $APP_NAME 打包 ==="
