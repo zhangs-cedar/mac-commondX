@@ -10,7 +10,6 @@ from cedar.utils import print
 from .event_tap import EventTap
 from .cut_manager import CutManager
 from .status_bar import StatusBarIcon
-from .license_manager import license_manager
 from .permission import check_accessibility, request_accessibility, open_accessibility_settings
 
 
@@ -26,8 +25,6 @@ class CommondXApp(NSObject):
     def applicationDidFinishLaunching_(self, _):
         """应用启动"""
         print("CommondX 启动中...")
-        self.license_status, code, self.remaining = license_manager.get_status()
-        print(f"License: {self.license_status}, Code: {code}, Remaining: {self.remaining}d")
         
         self.cut_manager = CutManager()
         self.status_bar = StatusBarIcon.alloc().initWithCutManager_(self.cut_manager)
@@ -37,7 +34,6 @@ class CommondXApp(NSObject):
             on_cut=self.on_cut,
             on_paste=self.on_paste,
             on_copy=None,
-            on_license_invalid=self._on_license_invalid
         )
         self._try_start()
     
@@ -85,17 +81,7 @@ class CommondXApp(NSObject):
             return
         
         print("CommondX 已启动")
-        msgs = {
-            "trial": f"试用期剩余 {self.remaining} 天",
-            "expired": "试用期已结束，请购买激活码延长1年"
-        }
-        msg = msgs.get(self.license_status, "已启动，⌘+X 剪切文件")
-        self.status_bar.send_notification("CommondX", msg)
-    
-    def _on_license_invalid(self):
-        """许可证无效时的回调"""
-        print("[App] 许可证无效，显示激活提示")
-        self.status_bar.show_activation_required()
+        self.status_bar.send_notification("CommondX", "已启动，⌘+X 剪切文件")
     
     def on_cut(self):
         """⌘+X 回调函数 (仅 Finder)"""

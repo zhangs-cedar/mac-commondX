@@ -17,7 +17,6 @@ from Quartz import (
 )
 from AppKit import NSWorkspace
 from cedar.utils import print
-from .license_manager import license_manager
 
 # 键码定义
 KEY_X = 7
@@ -30,11 +29,10 @@ EXCLUDE_FLAGS = Quartz.kCGEventFlagMaskShift | Quartz.kCGEventFlagMaskAlternate
 class EventTap:
     """全局快捷键监听器"""
     
-    def __init__(self, on_cut=None, on_paste=None, on_copy=None, on_license_invalid=None):
+    def __init__(self, on_cut=None, on_paste=None, on_copy=None):
         self.on_cut = on_cut
         self.on_paste = on_paste
         self.on_copy = on_copy
-        self.on_license_invalid = on_license_invalid
         self.tap = None
         self.running = False
 
@@ -70,13 +68,6 @@ class EventTap:
         # --- 处理 ⌘+X 和 ⌘+V (仅在 Finder 中生效) ---
         if keycode in (KEY_X, KEY_V):
             if not self._is_finder_active():
-                return event
-            
-            # 权限/许可证检查
-            if not license_manager.is_valid():
-                print("[EventTap] 许可证无效，忽略操作")
-                if self.on_license_invalid:
-                    self.on_license_invalid()
                 return event
             
             # 执行回调

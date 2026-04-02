@@ -17,10 +17,6 @@ os.environ['APP_DATA_DIR'] = str(APP_DATA_DIR)
 CONFIG_PATH = APP_DATA_DIR / "config.yaml"
 os.environ['CONFIG_PATH'] = str(CONFIG_PATH)
 
-# 许可证文件路径
-LICENSE_PATH = APP_DATA_DIR / "license.yaml"
-os.environ['LICENSE_PATH'] = str(LICENSE_PATH)
-
 # 日志路径
 from cedar.utils import print, create_name
 LOG_PATH = Path(__file__).parent / "logs" / f"{create_name()}commondx.log"
@@ -28,9 +24,8 @@ os.environ['LOG_PATH'] = str(LOG_PATH)
 
 # 打印所有配置路径（调试用）
 print(f"[DEBUG] [Main] 配置路径初始化:")
-print(f"[DEBUG] [Main]   APP_DATA_DIR = {APP_DATA_DIR}") 
+print(f"[DEBUG] [Main]   APP_DATA_DIR = {APP_DATA_DIR}")
 print(f"[DEBUG] [Main]   CONFIG_PATH = {CONFIG_PATH}")
-print(f"[DEBUG] [Main]   LICENSE_PATH = {LICENSE_PATH}")
 print(f"[DEBUG] [Main]   LOG_PATH = {LOG_PATH}")
 
 # 添加 src 路径

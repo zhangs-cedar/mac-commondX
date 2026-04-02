@@ -550,34 +550,6 @@ class StatusBarIcon(NSObject):
         # 返回按钮索引（1000=第一个按钮，1001=第二个按钮，以此类推）
         return result
     
-    def _show_alert(self, title, msg, with_input=False):
-        """
-        显示弹窗（激活码输入等场景）
-        
-        Args:
-            title: 弹窗标题
-            msg: 弹窗消息内容
-            with_input: 是否显示输入框
-            
-        Returns:
-            如果 with_input=True，返回 (ok, input_value)
-            否则返回 ok (bool)
-        """
-        print(f"[DEBUG] [StatusBar] _show_alert() - title={title}, with_input={with_input}")
-        
-        # 使用通用方法
-        if with_input:
-            buttons = ["激活"]
-            result = self._show_alert_common(
-                title, msg, buttons=buttons, 
-                with_input=True, input_placeholder="激活码"
-            )
-            ok, input_value = result
-            return (ok, input_value)
-        else:
-            result = self._show_alert_common(title, msg, buttons=["确定"], with_input=False)
-            return result == 1000
-    
     def setup_menu(self):
         """
         设置菜单
@@ -585,10 +557,8 @@ class StatusBarIcon(NSObject):
         按照流程图设计构建完整的菜单结构
         """
         print("[DEBUG] [StatusBar] 开始设置菜单...")
-        from .license_manager import license_manager
         from .permission import check_accessibility
         
-        status, code, remaining = license_manager.get_status()
         menu = NSMenu.alloc().init()
         
         # 【步骤 1】功能区
@@ -618,69 +588,7 @@ class StatusBarIcon(NSObject):
         
         menu.addItem_(NSMenuItem.separatorItem())
         
-        # 【步骤 4】许可信息
-        print(f"[DEBUG] [StatusBar] 添加许可信息区域 - status={status}")
-        from .license_manager import license_manager
-        
-        # 创建"激活 / 购买"子菜单
-        activation_menu = NSMenu.alloc().init()
-        
-        # 显示许可证状态（激活码激活延长1年，显示剩余天数）- 移到子菜单中，降低对用户的干扰
-        if status == "trial":
-            title = f"试用期 (剩余 {remaining} 天)"
-            _add_menu_item(activation_menu, self, title, enabled=False)
-        else:
-            # 已过期
-            _add_menu_item(activation_menu, self, "⚠ 试用期已结束", enabled=False)
-        
-        # 机器码显示（禁用项，仅显示）
-        machine_code_title = f"机器码: {license_manager.machine_code}"
-        _add_menu_item(activation_menu, self, machine_code_title, enabled=False)
-        activation_menu.addItem_(NSMenuItem.separatorItem())
-        
-        # 购买激活码
-        _add_menu_item(activation_menu, self, "⭐ 购买激活码", "openBuyPage:")
-        
-        # 复制机器码
-        _add_menu_item(activation_menu, self, "📋 复制机器码", "copyMachineCode:")
-        
-        # 访问官网续7天（每3天可以续期一次）
-        from .license_manager import license_manager
-        import time
-        can_extend = license_manager.can_visit_website_extend()
-        if can_extend:
-            menu_title = "🌐 访问官网续7天"
-        else:
-            # 计算剩余等待时间
-            last_extend = license_manager._data.get('last_website_extend_time', 0)
-            if last_extend > 0:
-                elapsed_days = (time.time() - last_extend) / 86400
-                remaining_days = 3 - elapsed_days
-                if remaining_days > 0:
-                    menu_title = f"🌐 访问官网续7天（还需等待 {remaining_days:.1f} 天）"
-                else:
-                    menu_title = "🌐 访问官网续7天（还需等待）"
-            else:
-                menu_title = "🌐 访问官网续7天"
-        
-        menu_item = _add_menu_item(activation_menu, self, menu_title, "visitWebsiteExtendTrial:")
-        if not can_extend:
-            menu_item.setEnabled_(False)  # 禁用菜单项
-        
-        activation_menu.addItem_(NSMenuItem.separatorItem())
-        
-        # 输入激活码
-        _add_menu_item(activation_menu, self, "🔑 输入激活码", "showActivationInput:")
-        
-        # 主菜单项：激活 / 购买
-        activation_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("激活 / 购买", None, "")
-        activation_item.setSubmenu_(activation_menu)
-        menu.addItem_(activation_item)
-        print("[DEBUG] [StatusBar] ✓ 激活/购买子菜单已添加")
-        
-        menu.addItem_(NSMenuItem.separatorItem())
-        
-        # 【步骤 5】系统设置
+        # 【步骤 4】系统设置
         print("[DEBUG] [StatusBar] 添加系统设置区域...")
         perm_ok = check_accessibility()
         if perm_ok:
@@ -690,7 +598,7 @@ class StatusBarIcon(NSObject):
         
         menu.addItem_(NSMenuItem.separatorItem())
         
-        # 【步骤 6】关于和退出
+        # 【步骤 5】关于和退出
         print("[DEBUG] [StatusBar] 添加关于和退出...")
         _add_menu_item(menu, self, "关于", "showAbout:")
         _add_menu_item(menu, self, "退出", "quit:", "q")
@@ -980,23 +888,6 @@ class StatusBarIcon(NSObject):
         print(f"[DEBUG] [StatusBar] ✓ 文件类型支持已更新: {operation_key} - {new_supported_types}")
     
     @objc.IBAction
-    def showActivationInput_(self, sender):
-        """输入激活码（简洁输入框）"""
-        from .license_manager import license_manager
-        
-        # 显示简洁输入框
-        ok, code = self._show_alert("🔑 输入激活码", "", True)
-        if ok and code:
-            if license_manager.activate(code):
-                rem = license_manager.remaining_days()
-                # 使用通知显示成功消息，不弹窗
-                self.send_notification("🎉 激活成功", f"试用期已延长1年，剩余 {rem} 天")
-                self.setup_menu()  # 刷新菜单
-            else:
-                # 使用通知显示失败消息，不弹窗
-                self.send_notification("❌ 激活失败", "激活码无效，请检查后重试")
-
-    @objc.IBAction
     def showKimiApiKeyInput_(self, sender):
         """输入 Kimi API Key（简洁输入框）"""
         print("[DEBUG] [StatusBar] 显示 Kimi API Key 输入框...")
@@ -1051,66 +942,6 @@ class StatusBarIcon(NSObject):
                 print(traceback.format_exc())
                 self.send_notification("❌ 保存失败", f"无法保存 API Key: {str(e)}")
 
-    @objc.IBAction
-    def copyMachineCode_(self, sender):
-        """复制机器码"""
-        from .license_manager import license_manager
-        copy_to_clipboard(license_manager.machine_code)
-        self.send_notification("✅ 已复制", "机器码已复制到剪贴板")
-    
-    @objc.IBAction
-    def visitWebsiteExtendTrial_(self, sender):
-        """访问官网续7天（每3天可以续期一次）"""
-        import time
-        from AppKit import NSWorkspace, NSURL
-        from .license_manager import license_manager
-        
-        # 检查是否可以续期
-        if not license_manager.can_visit_website_extend():
-            # 计算剩余等待时间
-            last_extend = license_manager._data.get('last_website_extend_time', 0)
-            if last_extend > 0:
-                elapsed_days = (time.time() - last_extend) / 86400
-                remaining_days = 3 - elapsed_days
-                if remaining_days > 0:
-                    self.send_notification("⏰ 提示", f"距离上次续期不足3天，还需等待 {remaining_days:.1f} 天")
-                else:
-                    self.send_notification("⏰ 提示", "距离上次续期不足3天，无法续期")
-            else:
-                self.send_notification("⏰ 提示", "距离上次续期不足3天，无法续期")
-            return
-        
-        # 打开官网
-        website_url = "https://github.com/zhangs-cedar/mac-commondX"
-        NSWorkspace.sharedWorkspace().openURL_(NSURL.URLWithString_(website_url))
-        
-        # 延长试用期7天（每3天可以续期一次）
-        success = license_manager.extend_trial_unlimited()
-        if success:
-            rem = license_manager.remaining_days()
-            self.send_notification("✅ 续期成功", f"已访问官网，试用期已延长7天，剩余 {rem} 天")
-            # 刷新菜单（更新许可证状态显示）
-            self.setup_menu()
-        else:
-            self.send_notification("❌ 续期失败", "无法延长试用期")
-         
-    @objc.IBAction
-    def openBuyPage_(self, sender):
-        """打开购买页面"""
-        from AppKit import NSWorkspace, NSURL
-        from .license_manager import license_manager
-        # 打开购买页面
-        NSWorkspace.sharedWorkspace().openURL_(NSURL.URLWithString_("https://wj.qq.com/s2/25468218/6ee1/"))
-        # 自动复制机器码到剪贴板
-        copy_to_clipboard(license_manager.machine_code)
-        self.send_notification("📋 已复制机器码", "机器码已复制到剪贴板，可在购买页面直接粘贴")
-
-    
-    def show_activation_required(self):
-        """提示需要激活"""
-        from .license_manager import license_manager
-        self.send_notification("⏰ 试用期已结束", f"机器码: {license_manager.machine_code}")
-    
     @objc.IBAction
     def clearCut_(self, sender):
         self.cut_manager.clear()
@@ -1522,14 +1353,13 @@ class StatusBarIcon(NSObject):
             
             # 确保配置文件存在
             if not CONFIG_PATH.exists():
-                # 创建默认配置文件（只包含配置相关字段，不包含许可证字段）
                 CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
                 default_config = {
                     'smart_ops': {key: True for key in SMART_OPS_OPTIONS.keys()},
                     'smart_ops_order': list(SMART_OPS_OPTIONS.keys())
                 }
                 write_config(default_config, str(CONFIG_PATH))
-                print(f"[DEBUG] [StatusBar] 创建默认配置文件: {CONFIG_PATH}（仅配置字段）")
+                print(f"[DEBUG] [StatusBar] 创建默认配置文件: {CONFIG_PATH}")
             
             # 使用系统默认编辑器打开文件
             # macOS 使用 'open -t' 命令打开文件，-t 表示使用默认文本编辑器
@@ -1538,10 +1368,9 @@ class StatusBarIcon(NSObject):
             
             if result.returncode == 0:
                 print(f"[DEBUG] [StatusBar] ✓ 配置文件已打开: {CONFIG_PATH}")
-                # 提示用户不要编辑许可证相关字段
                 self.send_notification(
-                    "📝 配置文件已打开", 
-                    f"配置文件路径:\n{CONFIG_PATH}\n\n✅ 配置文件已与许可证文件分离"
+                    "📝 配置文件已打开",
+                    f"路径: {CONFIG_PATH}",
                 )
             else:
                 print(f"[ERROR] [StatusBar] 打开配置文件失败: {result.stderr}")
@@ -1554,21 +1383,14 @@ class StatusBarIcon(NSObject):
     def showAbout_(self, sender):
         """显示关于对话框"""
         from AppKit import NSWorkspace, NSURL
-        from .license_manager import license_manager
-        
         print("[DEBUG] [StatusBar] showAbout_() - 显示关于对话框")
         
-        # 构建关于信息
-        about_text = "Mac 文件剪切移动工具\n\n• ⌘+X 剪切\n• ⌘+V 移动\n\n版本: 1.0.0\n作者: Cedar 🐱\n微信: z858998813"
-        
-        # 添加许可证状态（激活码激活延长1年，显示剩余天数）
-        rem = license_manager.remaining_days()
-        if rem > 0:
-            about_text += f"\n\n⏰ 试用期剩余 {rem} 天"
-            if license_manager.has_activation_code():
-                about_text += "\n💡 已使用激活码延长"
-        else:
-            about_text += "\n\n⚠️ 试用期已结束"
+        about_text = (
+            "Mac 文件剪切移动工具\n\n"
+            "• ⌘+X 剪切\n• ⌘+V 移动\n\n"
+            "版本: 1.0.0\n作者: Cedar 🐱\n微信: z858998813\n\n"
+            "完全免费、开源使用（CC BY-NC 4.0）"
+        )
         
         # 使用通用方法显示对话框
         response = self._show_alert_common(
