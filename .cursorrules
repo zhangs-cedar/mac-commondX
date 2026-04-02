@@ -13,14 +13,14 @@
 
 ---
 
-### 1. 环境与约束（Strict 3.8）
+### 1. 环境与约束（Strict 3.12）
 
-- **语法禁令**：禁用 `list[int]`、`X | Y`、`Optional`、`Union` 等 3.10+ 或需 `from __future__` 的写法；类型标注仅用 `list`、`dict`、`str`、`tuple` 等基础形式，保证 `D:\SMore_gitlab\SM_EX\env\python.exe` 可跑。
+- **语法禁令**：禁用 `list[int]`、`X | Y`、`Optional`、`Union` 等 或需 `from __future__` 的写法；类型标注仅用 `list`、`dict`、`str`、`tuple` 等基础形式。
 - **格式化闭环**：改动 `scripts/` 后执行 `ruff format scripts/`。
 - **人格协议**：回复以 `zs, ` 开头；结论先行；极简、毒舌、数据驱动。
 - **Git**：提交说明用中文。
 
-- python ： /Users/zhangsong/miniconda3/envs/py38
+- python ： /Users/zhangsong/miniconda3/envs/py312
 
 ### 2. 编程协议（Linux Style）
 
