@@ -1,91 +1,105 @@
-# CommondX：为 macOS 添加「剪切」快捷键和方便的快速操作
+# CommondX
 
-**补全 Finder 缺失的拼图，让 Mac 用起来更像 Mac。**
+> [!summary]
+> 为 macOS Finder 补上原生缺失的「文件剪切」体验：`Cmd+X` 剪切，`Cmd+V` 移动。  
+> 设计灵感来自 [Mac AppStore Command X](https://apps.apple.com/us/app/command-x/id6448461551?mt=12)。
 
-> 注：设计灵感来自 [Mac AppStore Command X](https://apps.apple.com/us/app/command-x/id6448461551?mt=12)
+## 快速导航
 
+- [产品定位](#产品定位)
+- [目标用户](#目标用户)
+- [核心能力](#核心能力)
+- [使用流程](#使用流程)
+- [安装与使用](#安装与使用)
+- [边界与说明](#边界与说明)
+- [开发者入口](#开发者入口)
+- [反馈](#反馈)
 
+## 产品定位
 
-## 为什么做这个工具？
+CommondX 是一个面向 Finder 高频操作的效率增强工具，核心目标是：
 
-macOS Finder 在某些操作上不够高效。作为日常使用 Mac 的开发者，我做了 CommondX 来解决这些问题。
+- 降低「文件移动」的操作成本
+- 缩短「常用文件操作」的路径长度
+- 用接近原生的交互方式保持学习成本最低
 
-### 1. 把 `Cmd+X` 还给 macOS
+## 目标用户
 
-Finder 不支持文件剪切，移动文件需要复制+粘贴+删除，或者拖拽。
+- 日常需要频繁整理文件的 macOS 用户
+- 习惯 Windows `Ctrl+X / Ctrl+V` 文件操作逻辑的迁移用户
+- 希望在 Finder 内完成压缩、路径复制、格式转换等操作的用户
 
-**解决方案**：实现 `Cmd+X` 剪切和 `Cmd+V` 移动，操作方式与 Windows 一致。
+## 核心能力
 
-* 选中文件 `Cmd+X` 剪切
-* 目标位置 `Cmd+V` 移动
-* 支持多文件批量操作、跨磁盘移动
+### 1) Finder 文件剪切移动
+
+- 选中文件后 `Cmd+X` 进入待移动状态
+- 在目标目录 `Cmd+V` 执行移动
+- 支持多文件批量与跨目录移动
 
 ![文件剪切演示](tools/demo.gif)
 
-### 2. 快速操作菜单
+### 2) 智能操作菜单（重复选择触发）
 
-压缩、解压、格式转换等操作需要打开特定应用，步骤繁琐。
+当连续两次对同一批文件执行触发操作时，弹出快捷菜单，提供：
 
-**解决方案**：连续两次选择相同文件时，显示操作菜单。
-
-* 基础操作：压缩/解压、复制路径、终端打开
-* 格式转换：Markdown 转 HTML、PDF/Word 在线编辑
+- 压缩 / 解压
+- 复制文件路径
+- 打开终端（切换到目标目录）
+- Markdown 转 HTML
+- PDF/Word 在线工具入口
 
 ![智能操作菜单](tools/Snipaste_2026-01-16_15-23-21.png)
 
-## 安装使用
+## 使用流程
+
+1. 在 Finder 选中文件并按 `Cmd+X`
+2. 如果重复选择同一批文件，显示智能操作菜单
+3. 选择目标操作，或切换目录后按 `Cmd+V` 完成移动
+
+## 安装与使用
 
 ### 快速开始
 
 1. 下载 [CommondX-2.0.0.dmg](https://github.com/zhangs-cedar/mac-commondX/releases/download/2.0.0/CommondX-2.0.0.dmg)
-2. 拖入 Applications 文件夹
-3. 首次运行授予辅助功能权限
+2. 拖入 `Applications`
+3. 首次启动后授予辅助功能权限（Accessibility）
 
-### 许可与费用
+## 边界与说明
 
-本应用**完全免费**使用。源码以 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) 开源（非商业使用与再分发需遵守该协议）。
+源码协议为 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)（非商业使用与再分发请遵守协议条款）。
 
+## 开发者入口
 
+### 协作方式
 
-## 开发说明
+项目采用「规则 + 流程图 + Skill」协作：
 
-这个项目使用 [Cursor](https://cursor.sh/) 开发，是一次 AI 辅助编程的实践。
+1. `/.cursorrules`：编码规范与行为约束
+2. `/流程图.md`：业务链路与状态流
+3. `/.cursor/skills/commondx-errors/`：错误模式 Skill（`SKILL.md` + `reference.md`）
 
-### 开发方式
+### 代码结构
 
-通过规范与文档控制 AI 开发行为：
-
-1. **`.cursorrules`**：定义代码风格和架构原则，AI 自动遵循
-2. **`流程图.md`**：描述业务逻辑和架构设计，确保代码修改与整体一致
-3. **`.cursor/skills/commondx-errors/`**：错误模式 Skill（`SKILL.md` + `reference.md`），避免重复踩坑
-
-修改代码时，AI 会读取这些文件，生成符合规范的代码。
-
-### 项目结构
-
-```
+```text
 mac-commondX/
-├── .cursorrules          # 开发规范
-├── .cursor/skills/commondx-errors/  # 错误模式 Skill
-├── 流程图.md             # 业务逻辑和架构设计
+├── .cursorrules
+├── .cursor/skills/commondx-errors/
+├── 流程图.md
 ├── src/
-│   ├── app.py           # 应用主逻辑
-│   ├── event_tap.py     # 全局快捷键监听
-│   ├── cut_manager.py   # 文件剪切管理
-│   ├── status_bar.py    # 状态栏菜单
-│   └── plugins/         # 插件系统
-└── main.py              # 应用入口
+│   ├── app.py
+│   ├── event_tap.py
+│   ├── cut_manager.py
+│   ├── status_bar.py
+│   └── plugins/
+└── main.py
 ```
 
-如果你对 AI 辅助开发感兴趣，欢迎查看代码：
-
-👉 [GitHub: zhangs-cedar/mac-commondX](https://github.com/zhangs-cedar/mac-commondX)
-
-
+仓库地址：  
+[GitHub: zhangs-cedar/mac-commondX](https://github.com/zhangs-cedar/mac-commondX)
 
 ## 反馈
 
-* **Issues**：[GitHub 提交反馈](https://github.com/zhangs-cedar/mac-commondX/issues)
-* **微信**：`z858998813`（备注 CommondX）
-
+- Issues: [GitHub 提交反馈](https://github.com/zhangs-cedar/mac-commondX/issues)
+- 微信：`z858998813`（备注 CommondX）
 
